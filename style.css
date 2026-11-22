@@ -138,7 +138,7 @@ select {
 .done input { width: 24px; height: 24px; margin: 0; accent-color: var(--red); }
 
 .body { flex: 1; min-width: 0; cursor: pointer; }
-.card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; text-align: start; }
+.card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; text-align: right; }
 .card p { margin: 0; }
 .meta { color: var(--muted); font-size: .85rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px !important; }
@@ -153,7 +153,7 @@ select {
 .tag.must { background: var(--red); color: #fff; font-weight: 700; }
 .tag.book { background: #fff3cd; }
 .tag.dist { background: #e3efff; font-weight: 700; }
-.notes { margin-top: 6px !important; font-size: .9rem; text-align: start; }
+.notes { margin-top: 6px !important; font-size: .9rem; }
 
 .nav {
   flex: none;

@@ -6,7 +6,7 @@ const CSV_URL = 'places.csv';
 const COLORS = ['#1f2430', '#c8102e', '#1d6fb8', '#e08a00', '#7b3fa0', '#2a8f6d', '#8a5a3c', '#d6478f'];
 
 const $ = id => document.getElementById(id);
-const done = new Set(JSON.parse(localStorage.getItem('done') || '[]')); // keyed by place name: rows get reordered
+const done = new Set(JSON.parse(localStorage.getItem('london-done') || '[]')); // keyed by place name: rows get reordered
 const filter = { cat: '', day: '', pri: '' };
 let places = [], cats = [], me = null, loaded = false;
 
@@ -97,7 +97,7 @@ function card(p) {
   box.checked = isDone;
   box.onchange = () => {
     done[box.checked ? 'add' : 'delete'](p.name);
-    localStorage.setItem('done', JSON.stringify([...done]));
+    localStorage.setItem('london-done', JSON.stringify([...done]));
     render();
   };
 
@@ -178,6 +178,6 @@ addEventListener('offline', render);
 if ('serviceWorker' in navigator) {
   // First visit: the page loads before the worker controls it, so fetch once more to get the CSV into its cache.
   if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', load, { once: true });
-  navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.register('sw.js').catch(() => {}); // app still works online without it
 }
 load();
