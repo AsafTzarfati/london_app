@@ -1,0 +1,4 @@
+# Source spreadsheet: has budget/itinerary tabs that shouldn't go public on Pages
+*.xlsx
+.DS_Store
+.claude/

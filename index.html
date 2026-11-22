@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>לונדון 10–15.12</title>
+  <meta name="theme-color" content="#c8102e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>לונדון <span dir="ltr">10–15.12</span></h1>
+    <button id="near" type="button">📍 קרוב אליי</button>
+  </header>
+
+  <nav aria-label="סינון">
+    <div id="cats" role="group" aria-label="קטגוריה"></div>
+    <div class="selects">
+      <select id="day" aria-label="יום"></select>
+      <select id="pri" aria-label="עדיפות"></select>
+    </div>
+  </nav>
+
+  <div id="map"></div>
+  <p id="status" role="status">טוען…</p>
+  <main id="list"></main>
+
+  <template id="card">
+    <article class="card">
+      <label class="done"><input type="checkbox"><span>בוצע</span></label>
+      <div class="body">
+        <h2 dir="auto"></h2>
+        <p class="meta"></p>
+        <p class="tags"></p>
+        <p class="notes" dir="auto"></p>
+      </div>
+      <a class="nav" target="_blank" rel="noopener">נווט</a>
+    </article>
+  </template>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+  <script src="csv.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
