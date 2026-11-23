@@ -41,6 +41,19 @@ window.initMap = async () => {
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
   });
   info = new google.maps.InfoWindow();
+
+  // CSS full screen: iPhone Safari has no Fullscreen API, so Google's own button doesn't work there
+  const full = el('button', '⛶ מסך מלא', 'map-full-btn');
+  full.type = 'button';
+  full.setAttribute('aria-pressed', 'false');
+  full.onclick = () => {
+    const center = map.getCenter();
+    const on = document.body.classList.toggle('map-full');
+    full.textContent = on ? '✕ סגור מפה' : '⛶ מסך מלא';
+    full.setAttribute('aria-pressed', on);
+    requestAnimationFrame(() => map.setCenter(center));
+  };
+  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(full);
   render();
 };
 window.gm_authFailure = () => { $('status').textContent = 'מפתח Google Maps לא תקין או לא מורשה לכתובת הזו'; };
