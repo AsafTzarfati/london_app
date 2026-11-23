@@ -19,7 +19,7 @@ let places = [], cats = [], me = null, loaded = false;
 let notice = '', undo = null; // status-line message; the place just marked done
 
 let map = null, info = null, pins = [];
-let locating = false, signPlace = null, focusName = null, reframe = false;
+let locating = false, signPlace = null, focusName = null, reframe = false, query = '', fullBtn = null;
 
 // The map needs a connection (Google's terms forbid caching it); the list never waits for it.
 function loadMap() {
@@ -46,25 +46,85 @@ window.initMap = async () => {
   info = new google.maps.InfoWindow();
   map.addListener('zoom_changed', () => pins.forEach(paint));
 
-  // CSS full screen: iPhone Safari has no Fullscreen API, so Google's own button doesn't work there
-  const full = el('button', '⛶ מסך מלא', 'map-full-btn');
-  full.type = 'button';
-  full.setAttribute('aria-pressed', 'false');
-  full.onclick = () => {
-    const center = map.getCenter();
-    const on = document.body.classList.toggle('map-full');
-    full.textContent = on ? '✕ סגור מפה' : '⛶ מסך מלא';
-    full.setAttribute('aria-pressed', on);
-    requestAnimationFrame(() => map.setCenter(center));
-  };
-  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(full);
+  // Full-screen map = the sheet lowered to its peek. iPhone Safari has no Fullscreen API.
+  fullBtn = el('button', 'מסך מלא', 'map-full-btn');
+  fullBtn.type = 'button';
+  fullBtn.onclick = () => setSheet(sheetStop === 'peek' ? 'half' : 'peek', true);
+  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(fullBtn);
+  setSheet(sheetStop);
   render();
   showOnMap();
 };
 
+// Bottom sheet: three resting places over the map.
+const sheet = $('sheet'), sheetBody = $('sheetBody');
+const STOPS = ['full', 'half', 'peek'];
+let sheetStop = 'half', sheetY = 0, drag = null, settleTimer = 0, sizing = false;
+const stopY = s => (s === 'full' ? 0 : s === 'peek' ? sheet.offsetHeight - 96 : Math.round(sheet.offsetHeight / 2));
+const placeSheet = y => { sheetY = y; sheet.style.transform = `translateY(${y}px)`; };
+// Google's logo and terms must stay visible, so the map ends where the sheet begins.
+const sizeMap = h => { $('map').style.height = `${Math.max(120, Math.round(h) + 1)}px`; };
+
+function setSheet(next, animate = false) {
+  const y = stopY(next);
+  sheetStop = next;
+  clearTimeout(settleTimer);
+  sheet.classList.toggle('glide', animate);
+  sheet.classList.toggle('open', next === 'full');
+  if (next !== 'full') sheetBody.scrollTop = 0;
+  if (animate) { sizeMap(Math.max(sheetY, y)); settleTimer = setTimeout(() => sizeMap(y), 320); } else sizeMap(y);
+  placeSheet(y);
+  $('handle').setAttribute('aria-label', next === 'full' ? 'הקטן את הרשימה' : 'הרחב את הרשימה');
+  if (fullBtn) fullBtn.textContent = next === 'peek' ? 'הצג רשימה' : 'מסך מלא';
+}
+
+sheet.addEventListener('touchstart', e => {
+  if (drag) return; // a second finger never takes over
+  const t = e.changedTouches[0];
+  drag = { id: t.identifier, startY: t.clientY, startTop: sheetY, lastY: t.clientY, lastT: e.timeStamp, v: 0, live: false,
+    inList: !!e.target.closest('#sheetBody') };
+}, { passive: true });
+
+sheet.addEventListener('touchmove', e => {
+  const t = drag && [...e.touches].find(x => x.identifier === drag.id);
+  if (!t) return;
+  const dy = t.clientY - drag.startY;
+  if (!drag.live) {
+    const atListTop = !drag.inList || sheetBody.scrollTop <= 0; // the handle always drags the sheet
+    if (sheetStop === 'full' && atListTop && dy > 0) e.preventDefault(); // pulling down closes the sheet, not the page
+    if (Math.abs(dy) < 6) return;
+    if (sheetStop === 'full' && drag.inList && (dy < 0 || !atListTop)) { drag = null; return; } // normal list scrolling
+    drag.live = true;
+    clearTimeout(settleTimer);
+    sheet.classList.remove('glide');
+  }
+  e.preventDefault();
+  drag.v = (t.clientY - drag.lastY) / Math.max(1, e.timeStamp - drag.lastT);
+  drag.lastY = t.clientY;
+  drag.lastT = e.timeStamp;
+  const y = Math.min(stopY('peek'), Math.max(0, drag.startTop + dy));
+  placeSheet(y);
+  if (!sizing) { sizing = true; requestAnimationFrame(() => { sizing = false; sizeMap(sheetY); }); }
+}, { passive: false });
+
+function endDrag(e) {
+  if (!drag || ![...e.changedTouches].some(t => t.identifier === drag.id)) return;
+  const { live, v } = drag;
+  drag = null;
+  if (!live) return;
+  let next = STOPS.reduce((a, b) => (Math.abs(stopY(b) - sheetY) < Math.abs(stopY(a) - sheetY) ? b : a));
+  if (Math.abs(v) > 0.45) { // a flick moves one stop in its direction
+    const ahead = STOPS.filter(s => (v > 0 ? stopY(s) > sheetY : stopY(s) < sheetY));
+    if (ahead.length) next = v > 0 ? ahead[0] : ahead[ahead.length - 1];
+  }
+  setSheet(next, true);
+}
+sheet.addEventListener('touchend', endDrag);
+sheet.addEventListener('touchcancel', endDrag);
+
 function focusOnMap(place) {
   focusName = place?.name || null;
-  scrollTo({ top: 0, behavior: 'smooth' }); // the map sits above the list
+  if (sheetStop === 'full') setSheet('half'); // keep the map in view
   showOnMap();
 }
 
@@ -153,19 +213,19 @@ function card(p) {
   const node = $('card').content.firstElementChild.cloneNode(true);
   const isDone = done.has(p.name);
   node.classList.toggle('is-done', isDone);
+  node.style.setProperty('--c', color(p));
+  node.querySelector('.thumb').textContent = icon(p.cat);
   node.querySelector('h3').textContent = p.name;
-  node.querySelector('.meta').textContent = [p.cat && `${icon(p.cat)} ${p.cat}`, p.area].filter(Boolean).join(' · ');
+  node.querySelector('.meta').textContent = [p.cat, p.area].filter(Boolean).join(' · ');
   node.querySelector('.notes').textContent = p.notes;
   const nav = node.querySelector('.nav');
   nav.href = navUrl(p);
   nav.setAttribute('aria-label', `נווט אל ${p.name}`);
 
   if (me && p.ll) {
-    const [value, unit] = walkParts(dist(p));
-    const num = node.querySelector('.num');
-    num.hidden = false;
-    num.classList.toggle('wide', String(value).length > 3);
-    num.append(String(value), el('small', unit));
+    const walk = node.querySelector('.walk');
+    walk.hidden = false;
+    walk.textContent = fmtWalk(dist(p));
   }
 
   const tags = node.querySelector('.tags');
@@ -208,11 +268,19 @@ function paint(pin) {
   const { scale, font } = emoji ? pinSize(map.getZoom()) : { scale: 8 }; // my location keeps its size
   const withIcon = emoji && font;
   pin.setLabel(withIcon ? { text: emoji, fontSize: `${font}px` } : null);
-  pin.setIcon({
-    path: google.maps.SymbolPath.CIRCLE, scale, fillOpacity: 1,
-    strokeWeight: withIcon ? 2 : 1.5,
-    fillColor: withIcon ? '#fff' : ring, strokeColor: withIcon ? ring : '#fff',
-  });
+  if (withIcon) {
+    // a white disc with a soft shadow; the classic Marker's vector symbols can't cast one
+    const size = scale * 2 + 10, c = size / 2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><defs><filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dy="1.5" stdDeviation="1.8" flood-opacity=".32"/></filter></defs><circle cx="${c}" cy="${c}" r="${scale}" fill="#fff" filter="url(#s)"/></svg>`;
+    pin.setIcon({
+      url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+      scaledSize: new google.maps.Size(size, size),
+      anchor: new google.maps.Point(c, c),
+      labelOrigin: new google.maps.Point(c, c),
+    });
+  } else {
+    pin.setIcon({ path: google.maps.SymbolPath.CIRCLE, scale, fillOpacity: 1, strokeWeight: 1.5, fillColor: ring, strokeColor: '#fff' });
+  }
 }
 
 function dot(position, ring, title, emoji, opacity = 1) {
@@ -224,7 +292,9 @@ function dot(position, ring, title, emoji, opacity = 1) {
 }
 
 function visible() {
-  const shown = places.filter(p => ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]));
+  const q = query.trim().toLowerCase();
+  const shown = places.filter(p => ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]) &&
+    (!q || `${p.name} ${p.cat} ${p.area} ${p.notes}`.toLowerCase().includes(q)));
   return me ? rankNear(shown, p => done.has(p.name), dist) : shown;
 }
 
@@ -304,7 +374,7 @@ $('near').onclick = () => {
     notice = inLondon() ? '' : 'רחוק מלונדון, הרשימה לפי מרחק';
     reframe = true;
     render();
-    scrollTo(0, 0);
+    if (sheetStop !== 'half') setSheet('half');
     showOnMap();
   }, err => {
     locating = false;
@@ -324,6 +394,23 @@ $('signDone').onclick = () => {
   render();
 };
 $('signMap').onclick = () => focusOnMap(signPlace);
+$('q').oninput = e => {
+  query = e.target.value;
+  undo = null;
+  render();
+  if (query && sheetStop !== 'full') setSheet('full', true);
+};
+$('handle').onclick = () => setSheet(sheetStop === 'half' ? 'full' : 'half', true);
+sheetBody.addEventListener('focusin', e => { // keyboard users reach the whole list
+  if (sheetStop !== 'full' && e.target.matches(':focus-visible')) setSheet('full', true);
+});
+
+const fitLayout = () => {
+  document.documentElement.style.setProperty('--top', `${document.querySelector('.top').offsetHeight}px`);
+  setSheet(sheetStop);
+};
+new ResizeObserver(fitLayout).observe(document.querySelector('.top'));
+addEventListener('resize', fitLayout);
 
 $('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; undo = null; render(); };
 addEventListener('online', () => { load(); loadMap(); });
@@ -336,6 +423,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', update, { once: true });
   navigator.serviceWorker.register('sw.js').catch(() => {}); // app still works online without it
 }
+fitLayout();
 renderSign();
 load();
 loadMap();

@@ -4,63 +4,73 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>לונדון 10–15.12</title>
-  <meta name="theme-color" content="#123f31" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0c2c23" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="preload" href="fonts/suez-one-hebrew.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>לונדון <small dir="ltr">10–15.12</small></h1>
+  <header class="top">
+    <h1 class="sr">לונדון 10–15.12</h1>
+    <label class="search">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="חיפוש בלונדון · 10&lrm;–&lrm;15.12" aria-label="חיפוש מקום">
+    </label>
+    <nav aria-label="סינון">
+      <div id="cats" role="group" aria-label="קטגוריה"></div>
+      <div class="selects">
+        <select id="day" aria-label="יום"></select>
+        <select id="pri" aria-label="עדיפות"></select>
+      </div>
+    </nav>
   </header>
-  <div class="valance" aria-hidden="true"></div>
 
-  <nav aria-label="סינון">
-    <div id="cats" role="group" aria-label="קטגוריה"></div>
-    <div class="selects">
-      <select id="day" aria-label="יום"></select>
-      <select id="pri" aria-label="עדיפות"></select>
-    </div>
-  </nav>
+  <div id="map"></div>
 
-  <div class="map-wrap">
-    <div id="map"></div>
+  <div id="sheet">
     <button id="near" type="button" aria-label="קרוב אליי: הצג את המיקום שלי" title="קרוב אליי">
-      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-        <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/>
-        <path d="M16.6 7.4 13.9 13.9 7.4 16.6 10.1 10.1Z" fill="currentColor"/>
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+        <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="12" cy="12" r="3.2" fill="currentColor"/>
+        <path d="M12 1.5V5M12 19v3.5M1.5 12H5M19 12h3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
-  </div>
+    <div class="surface">
+      <button id="handle" type="button" aria-label="הרחב את הרשימה"><span></span></button>
+      <p id="status" role="status">טוען…</p>
+      <div id="sheetBody">
+        <section id="sign" aria-labelledby="signName" hidden>
+          <p id="signLabel">הכי קרוב עכשיו</p>
+          <h2 id="signName" dir="auto"></h2>
+          <p id="signMeta"></p>
+          <a id="signNav" class="go" target="_blank" rel="noopener">נווט לשם</a>
+          <div class="sign-actions">
+            <button id="signMap" type="button">במפה</button>
+            <button id="signDone" type="button">בוצע</button>
+          </div>
+        </section>
 
-  <section id="sign" aria-labelledby="signName" hidden>
-    <p id="signLabel">הכי קרוב עכשיו</p>
-    <h2 id="signName" dir="auto"></h2>
-    <p id="signMeta"></p>
-    <a id="signNav" class="go" target="_blank" rel="noopener">נווט לשם</a>
-    <div class="sign-actions">
-      <button id="signMap" type="button">במפה</button>
-      <button id="signDone" type="button">בוצע</button>
+        <main id="list"></main>
+      </div>
     </div>
-  </section>
-
-  <p id="status" role="status">טוען…</p>
-  <main id="list"></main>
+  </div>
 
   <template id="card">
     <article class="card">
-      <span class="num" hidden></span>
+      <span class="thumb" aria-hidden="true"></span>
       <div class="body">
         <h3 dir="auto"></h3>
         <p class="meta"></p>
+        <p class="walk" hidden></p>
         <p class="tags"></p>
         <p class="notes"></p>
       </div>
-      <label class="done"><input type="checkbox"></label>
-      <a class="nav" target="_blank" rel="noopener">נווט</a>
+      <div class="actions">
+        <label class="done"><input type="checkbox"></label>
+        <a class="nav" target="_blank" rel="noopener">נווט</a>
+      </div>
     </article>
   </template>
 
