@@ -1,8 +1,8 @@
-const CACHE = 'london-v3';
+const CACHE = 'london-v4';
 const SHELL = ['./', 'style.css', 'csv.js', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e =>
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())));
 
 self.addEventListener('activate', e =>
   e.waitUntil(caches.keys()
@@ -17,7 +17,8 @@ self.addEventListener('fetch', e => {
   if (url.origin !== location.origin && url.hostname !== 'docs.google.com') return;
   e.respondWith(caches.open(CACHE).then(async cache => {
     const cached = await cache.match(req);
-    const fresh = fetch(req).then(res => {
+    // no-cache: GitHub Pages files sit in the HTTP cache for 10 minutes and would refill us with the old version
+    const fresh = (url.origin === location.origin ? fetch(req.url, { cache: 'no-cache' }) : fetch(req)).then(res => {
       if (res.ok) cache.put(req, res.clone()).catch(() => {});
       return res;
     });
