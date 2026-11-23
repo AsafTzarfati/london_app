@@ -6,8 +6,8 @@ const CSV_URL = 'places.csv';
 // Empty = Google's "for development purposes only" map.
 const GOOGLE_MAPS_KEY = 'AIzaSyCuaFAjkEVs484S_EaapYjgq1AQCFSxenE';
 
-// Pin colours, handed out to categories in order of first appearance in the sheet.
-const COLORS = ['#1f2430', '#c8102e', '#1d6fb8', '#e08a00', '#7b3fa0', '#2a8f6d', '#8a5a3c', '#d6478f'];
+// Pin colours from the market and the city: baked crust, roasted coffee, pillar box, Thames, beetroot.
+const PIN_COLORS = { 'מאפים וקינוחים': '#c98a12', 'קפה ותה': '#6f4a2f', 'אוכל': '#b3202a', 'קניות': '#2c5a70', 'שווקים ואזורים': '#6a3557' };
 
 const ICONS = { 'מאפים וקינוחים': '🧁', 'קפה ותה': '☕', 'אוכל': '🍜', 'קניות': '🛍️', 'שווקים ואזורים': '🎪' };
 const icon = cat => ICONS[cat] || '📍';
@@ -19,6 +19,7 @@ let places = [], cats = [], me = null, loaded = false;
 let notice = '', undo = null; // status-line message; the place just marked done
 
 let map = null, info = null, pins = [];
+let locating = false, signPlace = null, focusName = null, reframe = false;
 
 // The map needs a connection (Google's terms forbid caching it); the list never waits for it.
 function loadMap() {
@@ -43,21 +44,36 @@ window.initMap = async () => {
   });
   info = new google.maps.InfoWindow();
   map.addListener('zoom_changed', () => pins.forEach(paint));
-
-  // CSS full screen: iPhone Safari has no Fullscreen API, so Google's own button doesn't work there
-  const full = el('button', '⛶ מסך מלא', 'map-full-btn');
-  full.type = 'button';
-  full.setAttribute('aria-pressed', 'false');
-  full.onclick = () => {
-    const center = map.getCenter();
-    const on = document.body.classList.toggle('map-full');
-    full.textContent = on ? '✕ סגור מפה' : '⛶ מסך מלא';
-    full.setAttribute('aria-pressed', on);
-    requestAnimationFrame(() => map.setCenter(center));
-  };
-  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(full);
   render();
+  showOnMap();
 };
+
+// CSS full screen: iPhone Safari has no Fullscreen API. Google loads on first open, so a list-only visit costs no map load.
+function openMap(place) {
+  focusName = place?.name || null;
+  document.body.classList.add('map-full');
+  loadMap();
+  showOnMap();
+}
+
+function showOnMap() {
+  if (!map || !document.body.classList.contains('map-full')) return;
+  requestAnimationFrame(() => { // after the map has its full-screen size
+    const place = focusName && places.find(p => p.name === focusName);
+    focusName = null;
+    if (place?.ll) {
+      map.setCenter(place.ll);
+      map.setZoom(Math.max(map.getZoom(), 15));
+      place.openPin?.();
+    } else if (reframe && me) {
+      reframe = false;
+      const next = nextPlace();
+      if (!next) { if (inLondon()) map.panTo(me); return; }
+      map.fitBounds(new google.maps.LatLngBounds().extend(me).extend(next.ll), 60);
+      google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+    }
+  });
+}
 window.gm_authFailure = () => { $('status').textContent = 'מפתח Google Maps לא תקין או לא מורשה לכתובת הזו'; };
 
 function toPlaces(text) {
@@ -83,8 +99,10 @@ function toPlaces(text) {
 
 const uniq = key => [...new Set(places.map(p => p[key]).filter(Boolean))];
 const dayNum = d => { const m = d.match(/(\d+)\.(\d+)/); return m ? m[2] * 100 + +m[1] : 0; }; // "ו׳ 11.12" -> 1211
-const color = p => COLORS[Math.max(cats.indexOf(p.cat), 0) % COLORS.length];
+const color = p => PIN_COLORS[p.cat] || '#123f31';
 const dist = p => (me && p.ll ? metres(me, p.ll) : Infinity);
+const inLondon = () => !!me && places.some(p => p.ll && metres(me, p.ll) < 50000);
+const nextPlace = () => (inLondon() ? visible().find(p => p.ll && !done.has(p.name)) : undefined);
 const saveDone = () => localStorage.setItem('london-done', JSON.stringify([...done]));
 const navUrl = p => 'https://www.google.com/maps/dir/?api=1&destination=' +
   encodeURIComponent(p.ll ? `${p.ll.lat},${p.ll.lng}` : `${p.name} London`);
@@ -109,26 +127,36 @@ function buildFilters() {
   $('cats').replaceChildren(chip('הכל', ''), ...cats.map(c => chip(`${icon(c)} ${c}`, c)));
 
   const fill = (key, all, values) => {
-    if (!values.includes(filter[key])) filter[key] = '';
+    $(key).hidden = !hasChoice(places, key);
+    if ($(key).hidden || !values.includes(filter[key])) filter[key] = ''; // a hidden filter must not keep filtering
     $(key).replaceChildren(new Option(all, ''), ...values.map(v => new Option(v, v)));
     $(key).value = filter[key];
   };
   fill('day', 'כל הימים', uniq('day').sort((a, b) => dayNum(a) - dayNum(b)));
   fill('pri', 'כל העדיפויות', uniq('pri'));
+  document.querySelector('.selects').hidden = $('day').hidden && $('pri').hidden;
 }
 
 function card(p) {
   const node = $('card').content.firstElementChild.cloneNode(true);
   const isDone = done.has(p.name);
-  node.style.setProperty('--c', color(p));
   node.classList.toggle('is-done', isDone);
-  node.querySelector('h2').textContent = p.name;
+  node.querySelector('h3').textContent = p.name;
   node.querySelector('.meta').textContent = [p.cat && `${icon(p.cat)} ${p.cat}`, p.area].filter(Boolean).join(' · ');
   node.querySelector('.notes').textContent = p.notes;
-  node.querySelector('.nav').href = navUrl(p);
+  const nav = node.querySelector('.nav');
+  nav.href = navUrl(p);
+  nav.setAttribute('aria-label', `נווט אל ${p.name}`);
+
+  if (me && p.ll) {
+    const [value, unit] = walkParts(dist(p));
+    const num = node.querySelector('.num');
+    num.hidden = false;
+    num.classList.toggle('wide', String(value).length > 3);
+    num.append(String(value), el('small', unit));
+  }
 
   const tags = node.querySelector('.tags');
-  if (me && p.ll) tags.append(el('span', fmtWalk(dist(p)), 'tag dist'));
   if (p.pri) tags.append(el('span', p.pri, p.pri === 'חובה' ? 'tag must' : 'tag'));
   if (p.day) tags.append(el('span', p.day, 'tag'));
   if (p.book === 'כן') tags.append(el('span', '🎟 להזמין מראש', 'tag book'));
@@ -136,6 +164,7 @@ function card(p) {
 
   const box = node.querySelector('input');
   box.checked = isDone;
+  box.setAttribute('aria-label', `בוצע: ${p.name}`);
   box.onchange = () => {
     done[box.checked ? 'add' : 'delete'](p.name);
     saveDone();
@@ -143,6 +172,7 @@ function card(p) {
     render();
   };
 
+  if (p.ll) node.querySelector('.body').onclick = () => openMap(p);
   if (p.ll && map) {
     const pop = el('div', '');
     pop.dir = 'auto';
@@ -151,18 +181,8 @@ function card(p) {
     pop.append(el('strong', p.name), document.createElement('br'), link);
     // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
     const pin = dot(p.ll, color(p), p.name, icon(p.cat), isDone ? 0.4 : 1);
-    const open = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
-    pin.addListener('click', () => {
-      open();
-      node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      node.classList.add('flash');
-      setTimeout(() => node.classList.remove('flash'), 1200);
-    });
-    node.querySelector('.body').onclick = () => {
-      map.panTo(p.ll);
-      map.setZoom(Math.max(map.getZoom(), 15));
-      open();
-    };
+    p.openPin = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
+    pin.addListener('click', p.openPin);
   }
   return node;
 }
@@ -203,7 +223,6 @@ function showStatus() {
     notice,
     loaded && (count > 1 ? `${count} מקומות` : count ? 'מקום אחד' : 'אין מקומות שתואמים לסינון'),
     loaded && `${places.filter(p => done.has(p.name)).length} בוצעו`,
-    loaded && me && !notice && 'הקרובים שטרם בוצעו קודם',
     loaded && !navigator.onLine && 'אופליין – נתונים שמורים',
   ].filter(Boolean).join(' · '));
   if (!undo) return;
@@ -214,13 +233,37 @@ function showStatus() {
   $('status').append(' ', back);
 }
 
+function renderSign() {
+  const p = signPlace = nextPlace();
+  const headline = p ? p.name.split(' - ')[0] : !me ? 'לאן הולכים עכשיו?' : inLondon() ? 'סיימתם את כל המקומות כאן' : 'עדיין לא בלונדון';
+  const detail = p ? [p.cat && `${icon(p.cat)} ${p.cat}`, fmtWalk(dist(p))].filter(Boolean).join(' · ')
+    : !me ? 'נמצא את המקום הקרוב מהרשימה שלכם' : inLondon() ? 'אפשר לבחור קטגוריה אחרת' : 'הרשימה ממוינת לפי המרחק מכם';
+  $('signLabel').hidden = !p;
+  $('signName').textContent = headline;
+  $('signName').classList.toggle('long', headline.length > 20); // keeps the sign from pushing the list off screen
+  $('signMeta').textContent = detail;
+  $('signNav').hidden = !p;
+  if (p) {
+    $('signNav').href = navUrl(p);
+    $('signNav').setAttribute('aria-label', `נווט אל ${p.name}`);
+    $('signDone').setAttribute('aria-label', `סמן כבוצע: ${p.name}`);
+  }
+  $('signMap').hidden = $('signDone').hidden = !p;
+  $('near').classList.toggle('primary', !me);
+  $('near').disabled = locating;
+  $('near').textContent = locating ? 'מאתר…' : me ? 'רענן מיקום' : 'קרוב אליי';
+}
+
 function render() {
   const shown = visible();
+  const next = nextPlace();
   pins.forEach(pin => pin.setMap(null));
   pins = [];
   info?.close();
-  $('list').replaceChildren(...shown.map(card));
+  const nodes = shown.map(card); // every place gets its pin, including the one on the sign
+  $('list').replaceChildren(...nodes.filter((_, i) => shown[i] !== next));
   if (me && map) dot(me, '#1a73e8', 'אני כאן');
+  renderSign();
   showStatus();
 }
 
@@ -242,40 +285,42 @@ async function load() {
 
 // ponytail: one fix per press, no live tracking and no "unsort" (reload restores sheet order). watchPosition if needed.
 $('near').onclick = () => {
-  const btn = $('near'), label = btn.textContent;
   undo = null;
   if (!navigator.geolocation) { notice = 'הדפדפן לא תומך במיקום'; return showStatus(); }
-  btn.disabled = true;
-  btn.textContent = 'מאתר…';
+  locating = true;
   notice = 'מאתר מיקום…';
+  renderSign();
   showStatus();
   navigator.geolocation.getCurrentPosition(pos => {
-    btn.disabled = false;
-    btn.textContent = '📍 רענן מיקום';
+    locating = false;
     notice = '';
     me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    // only move the map when actually in town, otherwise it zooms out to another country
-    const inTown = places.some(p => p.ll && metres(me, p.ll) < 50000);
-    if (map && !inTown) notice = 'המיקום רחוק מלונדון, המפה לא זזה';
+    reframe = inLondon(); // only move the map when in town, otherwise it zooms out to another country
     render();
-    $('list').scrollTop = 0;
-    if (!map || !inTown) return;
-    const next = visible().find(p => p.ll && !done.has(p.name));
-    if (!next) return map.panTo(me);
-    map.fitBounds(new google.maps.LatLngBounds().extend(me).extend(next.ll), 60);
-    google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+    scrollTo(0, 0);
   }, err => {
-    btn.disabled = false;
-    btn.textContent = label;
+    locating = false;
     notice = err.code === 1
       ? 'אין הרשאת מיקום. טענו מחדש ואשרו, או בדקו בהגדרות האייפון'
       : 'לא הצלחתי לאתר מיקום. נסו שוב בעוד רגע';
+    renderSign();
     showStatus();
   }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
 };
 
+$('signDone').onclick = () => {
+  if (!signPlace) return;
+  done.add(signPlace.name);
+  saveDone();
+  undo = signPlace.name;
+  render();
+};
+$('signMap').onclick = () => openMap(signPlace);
+$('mapOpen').onclick = () => openMap();
+$('mapClose').onclick = () => { document.body.classList.remove('map-full'); $('mapOpen').focus(); };
+
 $('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; undo = null; render(); };
-addEventListener('online', () => { load(); loadMap(); });
+addEventListener('online', () => { load(); if (document.body.classList.contains('map-full')) loadMap(); });
 addEventListener('offline', render);
 
 if ('serviceWorker' in navigator) {
@@ -285,5 +330,5 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', update, { once: true });
   navigator.serviceWorker.register('sw.js').catch(() => {}); // app still works online without it
 }
+renderSign();
 load();
-loadMap();

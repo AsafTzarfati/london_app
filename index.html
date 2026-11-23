@@ -4,17 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>לונדון 10–15.12</title>
-  <meta name="theme-color" content="#c8102e">
+  <meta name="theme-color" content="#123f31" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c2c23" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preload" href="fonts/suez-one-hebrew.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>לונדון <span dir="ltr">10–15.12</span></h1>
-    <button id="near" type="button">📍 קרוב אליי</button>
+    <h1>לונדון <small dir="ltr">10–15.12</small></h1>
+    <button id="mapOpen" type="button">מפה</button>
   </header>
+  <div class="valance" aria-hidden="true"></div>
 
   <nav aria-label="סינון">
     <div id="cats" role="group" aria-label="קטגוריה"></div>
@@ -24,19 +27,34 @@
     </div>
   </nav>
 
-  <div id="map"></div>
+  <section id="sign" aria-labelledby="signName">
+    <p id="signLabel" hidden>הכי קרוב עכשיו</p>
+    <h2 id="signName" dir="auto"></h2>
+    <p id="signMeta"></p>
+    <a id="signNav" class="go" target="_blank" rel="noopener" hidden>נווט לשם</a>
+    <div class="sign-actions">
+      <button id="near" type="button"></button>
+      <button id="signMap" type="button" hidden>במפה</button>
+      <button id="signDone" type="button" hidden>בוצע</button>
+    </div>
+  </section>
+
   <p id="status" role="status">טוען…</p>
   <main id="list"></main>
 
+  <div id="map"></div>
+  <button id="mapClose" type="button">סגור מפה</button>
+
   <template id="card">
     <article class="card">
-      <label class="done"><input type="checkbox"><span>בוצע</span></label>
+      <span class="num" hidden></span>
       <div class="body">
-        <h2 dir="auto"></h2>
+        <h3 dir="auto"></h3>
         <p class="meta"></p>
         <p class="tags"></p>
         <p class="notes"></p>
       </div>
+      <label class="done"><input type="checkbox"></label>
       <a class="nav" target="_blank" rel="noopener">נווט</a>
     </article>
   </template>

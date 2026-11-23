@@ -1,4 +1,4 @@
-// "Where next?": pure helpers, shared with test.js.
+// Pure helpers for ranking and filtering, shared with test.js.
 function metres(a, b) { // haversine
   const rad = d => d * Math.PI / 180;
   const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 +
@@ -11,11 +11,19 @@ const rankNear = (list, isDone, dist) =>
   [...list].sort((a, b) => isDone(a) - isDone(b) || (dist(a) - dist(b)) || 0);
 
 // ponytail: straight line x 1.3 at 80 m/min approximates London streets; a routing API would be exact but costs per call.
-function fmtWalk(m) {
-  if (m >= 100000) return `${Math.round(m / 1000).toLocaleString('en')} ק״מ`;
-  if (m > 2500) return `${(m / 1000).toFixed(1)} ק״מ`;
-  const min = Math.max(1, Math.round(m * 1.3 / 80));
-  return min === 1 ? 'כדקה הליכה' : `כ־${min} דק׳ הליכה`;
+function walkParts(m) {
+  if (m >= 100000) return [Math.round(m / 1000).toLocaleString('en'), 'ק״מ'];
+  if (m > 2500) return [(m / 1000).toFixed(1), 'ק״מ'];
+  return [Math.max(1, Math.round(m * 1.3 / 80)), 'דק׳'];
 }
 
-if (typeof module !== 'undefined') module.exports = { metres, rankNear, fmtWalk }; // for test.js
+function fmtWalk(m) {
+  const [value, unit] = walkParts(m);
+  if (unit === 'ק״מ') return `${value} ק״מ`;
+  return value === 1 ? 'כדקה הליכה' : `כ־${value} דק׳ הליכה`;
+}
+
+// A filter is worth showing only if it can narrow the list. A blank counts as a value: "must" on some rows is a choice.
+const hasChoice = (list, key) => new Set(list.map(p => p[key])).size > 1;
+
+if (typeof module !== 'undefined') module.exports = { metres, rankNear, walkParts, fmtWalk, hasChoice }; // for test.js
