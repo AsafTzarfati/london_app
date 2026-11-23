@@ -4,7 +4,7 @@ const CSV_URL = 'places.csv';
 
 // Browser key from Google Cloud, restricted to the site's URL and to the Maps JavaScript API.
 // Empty = Google's "for development purposes only" map.
-const GOOGLE_MAPS_KEY = '';
+const GOOGLE_MAPS_KEY = 'AIzaSyCuaFAjkEVs484S_EaapYjgq1AQCFSxenE';
 
 // Pin colours, handed out to categories in order of first appearance in the sheet.
 const COLORS = ['#1f2430', '#c8102e', '#1d6fb8', '#e08a00', '#7b3fa0', '#2a8f6d', '#8a5a3c', '#d6478f'];
