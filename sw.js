@@ -1,4 +1,4 @@
-const CACHE = 'london-v5';
+const CACHE = 'london-v6';
 const SHELL = ['./', 'style.css', 'csv.js', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e =>

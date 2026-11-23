@@ -41,6 +41,7 @@ window.initMap = async () => {
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
   });
   info = new google.maps.InfoWindow();
+  map.addListener('zoom_changed', () => pins.forEach(paint));
 
   // CSS full screen: iPhone Safari has no Fullscreen API, so Google's own button doesn't work there
   const full = el('button', '⛶ מסך מלא', 'map-full-btn');
@@ -153,7 +154,7 @@ function card(p) {
     link.href = navUrl(p); link.target = '_blank'; link.rel = 'noopener';
     pop.append(el('strong', p.name), document.createElement('br'), link);
     // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
-    const pin = dot(p.ll, 13, color(p), p.name, icon(p.cat), isDone ? 0.4 : 1);
+    const pin = dot(p.ll, color(p), p.name, icon(p.cat), isDone ? 0.4 : 1);
     const open = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
     pin.addListener('click', () => {
       open();
@@ -170,16 +171,26 @@ function card(p) {
   return node;
 }
 
-// With an emoji: white disc, category-coloured ring. Without (my location): solid dot.
-function dot(position, scale, ring, title, emoji, opacity = 1) {
-  const pin = new google.maps.Marker({
-    map, position, title, opacity,
-    label: emoji && { text: emoji, fontSize: '15px' },
-    icon: {
-      path: google.maps.SymbolPath.CIRCLE, scale, fillOpacity: 1, strokeWeight: 2.5,
-      fillColor: emoji ? '#fff' : ring, strokeColor: emoji ? ring : '#fff',
-    },
+// Pins shrink as you zoom out; far out they're plain category-coloured dots so the map stays readable.
+const pinSize = zoom => zoom < 12.5 ? { scale: 4 } : zoom < 13.5 ? { scale: 8, font: 10 } :
+  zoom < 14.5 ? { scale: 10, font: 12 } : { scale: 13, font: 15 };
+
+function paint(pin) {
+  const { ring, emoji } = pin.look;
+  const { scale, font } = emoji ? pinSize(map.getZoom()) : { scale: 8 }; // my location keeps its size
+  const withIcon = emoji && font;
+  pin.setLabel(withIcon ? { text: emoji, fontSize: `${font}px` } : null);
+  pin.setIcon({
+    path: google.maps.SymbolPath.CIRCLE, scale, fillOpacity: 1,
+    strokeWeight: withIcon ? 2 : 1.5,
+    fillColor: withIcon ? '#fff' : ring, strokeColor: withIcon ? ring : '#fff',
   });
+}
+
+function dot(position, ring, title, emoji, opacity = 1) {
+  const pin = new google.maps.Marker({ map, position, title, opacity });
+  pin.look = { ring, emoji };
+  paint(pin);
   pins.push(pin);
   return pin;
 }
@@ -191,7 +202,7 @@ function render() {
   pins = [];
   info?.close();
   $('list').replaceChildren(...shown.map(card));
-  if (me && map) dot(me, 8, '#1a73e8', 'אני כאן');
+  if (me && map) dot(me, '#1a73e8', 'אני כאן');
 
   if (!loaded) return;
   $('status').textContent = [
