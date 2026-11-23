@@ -41,6 +41,7 @@ window.initMap = async () => {
     center: { lat: 51.509, lng: -0.126 }, zoom: 13,
     gestureHandling: 'greedy', // one finger pans: the page itself doesn't scroll
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+    cameraControl: false, // its corner belongs to the location button; pinch zooms
   });
   info = new google.maps.InfoWindow();
   map.addListener('zoom_changed', () => pins.forEach(paint));
@@ -79,7 +80,7 @@ function showOnMap() {
     } else if (reframe && me) {
       reframe = false;
       const next = nextPlace();
-      if (!next) { if (inLondon()) map.panTo(me); return; }
+      if (!next) { map.panTo(me); if (!inLondon()) map.setZoom(14); return; }
       map.fitBounds(new google.maps.LatLngBounds().extend(me).extend(next.ll), 60);
       google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
     }
@@ -246,23 +247,18 @@ function showStatus() {
 
 function renderSign() {
   const p = signPlace = nextPlace();
-  const headline = p ? p.name.split(' - ')[0] : !me ? 'לאן הולכים עכשיו?' : inLondon() ? 'סיימתם את כל המקומות כאן' : 'עדיין לא בלונדון';
-  const detail = p ? [p.cat && `${icon(p.cat)} ${p.cat}`, fmtWalk(dist(p))].filter(Boolean).join(' · ')
-    : !me ? 'נמצא את המקום הקרוב מהרשימה שלכם' : inLondon() ? 'אפשר לבחור קטגוריה אחרת' : 'הרשימה ממוינת לפי המרחק מכם';
-  $('signLabel').hidden = !p;
+  $('near').disabled = locating;
+  $('near').classList.toggle('locating', locating);
+  $('near').classList.toggle('found', !!me);
+  $('sign').hidden = !p;
+  if (!p) return;
+  const headline = p.name.split(' - ')[0];
   $('signName').textContent = headline;
   $('signName').classList.toggle('long', headline.length > 20); // keeps the sign from pushing the list off screen
-  $('signMeta').textContent = detail;
-  $('signNav').hidden = !p;
-  if (p) {
-    $('signNav').href = navUrl(p);
-    $('signNav').setAttribute('aria-label', `נווט אל ${p.name}`);
-    $('signDone').setAttribute('aria-label', `סמן כבוצע: ${p.name}`);
-  }
-  $('signMap').hidden = $('signDone').hidden = !p;
-  $('near').classList.toggle('primary', !me);
-  $('near').disabled = locating;
-  $('near').textContent = locating ? 'מאתר…' : me ? 'רענן מיקום' : 'קרוב אליי';
+  $('signMeta').textContent = [p.cat && `${icon(p.cat)} ${p.cat}`, fmtWalk(dist(p))].filter(Boolean).join(' · ');
+  $('signNav').href = navUrl(p);
+  $('signNav').setAttribute('aria-label', `נווט אל ${p.name}`);
+  $('signDone').setAttribute('aria-label', `סמן כבוצע: ${p.name}`);
 }
 
 function render() {
@@ -304,9 +300,9 @@ $('near').onclick = () => {
   showStatus();
   navigator.geolocation.getCurrentPosition(pos => {
     locating = false;
-    notice = '';
     me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    reframe = inLondon(); // only move the map when in town, otherwise it zooms out to another country
+    notice = inLondon() ? '' : 'רחוק מלונדון, הרשימה לפי מרחק';
+    reframe = true;
     render();
     scrollTo(0, 0);
     showOnMap();

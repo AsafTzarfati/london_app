@@ -26,17 +26,24 @@
     </div>
   </nav>
 
-  <div id="map"></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <button id="near" type="button" aria-label="קרוב אליי: הצג את המיקום שלי" title="קרוב אליי">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16.6 7.4 13.9 13.9 7.4 16.6 10.1 10.1Z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
 
-  <section id="sign" aria-labelledby="signName">
-    <p id="signLabel" hidden>הכי קרוב עכשיו</p>
+  <section id="sign" aria-labelledby="signName" hidden>
+    <p id="signLabel">הכי קרוב עכשיו</p>
     <h2 id="signName" dir="auto"></h2>
     <p id="signMeta"></p>
-    <a id="signNav" class="go" target="_blank" rel="noopener" hidden>נווט לשם</a>
+    <a id="signNav" class="go" target="_blank" rel="noopener">נווט לשם</a>
     <div class="sign-actions">
-      <button id="near" type="button"></button>
-      <button id="signMap" type="button" hidden>במפה</button>
-      <button id="signDone" type="button" hidden>בוצע</button>
+      <button id="signMap" type="button">במפה</button>
+      <button id="signDone" type="button">בוצע</button>
     </div>
   </section>
 

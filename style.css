@@ -130,7 +130,7 @@ select {
 #signName.long { font-size: 1.45rem; }
 #signMeta { font-size: .95rem; }
 
-.go, #near.primary {
+.go {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,7 +145,6 @@ select {
   font-weight: 800;
   text-decoration: none;
 }
-.go[hidden] { display: none; }
 .sign-actions { display: flex; gap: 6px; margin-top: 4px; }
 .sign-actions button {
   flex: 1;
@@ -158,8 +157,6 @@ select {
   font-weight: 700;
   white-space: nowrap;
 }
-.sign-actions button[hidden] { display: none; }
-#near:disabled { opacity: .75; }
 
 #status { padding: 8px 20px; color: var(--soft); font-size: .85rem; }
 .undo {
@@ -230,6 +227,28 @@ select {
   font-weight: 800;
   text-decoration: none;
 }
+
+.map-wrap { position: relative; }
+#near {
+  position: absolute;
+  right: 10px;
+  bottom: 30px; /* clears Google's attribution line */
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  color: #17251f;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .35);
+}
+#near.found { color: #1a73e8; }
+#near.locating svg { animation: locating 1s ease-in-out infinite alternate; }
+@keyframes locating { to { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { #near.locating svg { animation: none; opacity: .5; } }
+body.map-full #near { position: fixed; bottom: calc(30px + env(safe-area-inset-bottom)); z-index: 1001; }
 
 #map {
   display: grid; /* centres the "map needs internet" message */
