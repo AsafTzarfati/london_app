@@ -71,15 +71,7 @@ nav { padding: 10px 0 8px; border-bottom: 1px solid var(--line); background: var
   font-size: .9rem;
   cursor: pointer;
 }
-#cats button[style]::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--c);
-}
 #cats button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
-#cats button[aria-pressed="true"]::before { outline: 2px solid #fff; }
 
 .selects { display: flex; gap: 8px; padding: 0 16px; }
 select {

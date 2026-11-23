@@ -9,6 +9,9 @@ const GOOGLE_MAPS_KEY = 'AIzaSyCuaFAjkEVs484S_EaapYjgq1AQCFSxenE';
 // Pin colours, handed out to categories in order of first appearance in the sheet.
 const COLORS = ['#1f2430', '#c8102e', '#1d6fb8', '#e08a00', '#7b3fa0', '#2a8f6d', '#8a5a3c', '#d6478f'];
 
+const ICONS = { 'מאפים וקינוחים': '🧁', 'קפה ותה': '☕', 'אוכל': '🍜', 'קניות': '🛍️', 'שווקים ואזורים': '🎪' };
+const icon = cat => ICONS[cat] || '📍';
+
 const $ = id => document.getElementById(id);
 const done = new Set(JSON.parse(localStorage.getItem('london-done') || '[]')); // keyed by place name: rows get reordered
 const filter = { cat: '', day: '', pri: '' };
@@ -86,16 +89,15 @@ function el(tag, text, cls) {
 
 function buildFilters() {
   cats = uniq('cat');
-  const chip = (label, value, dot) => {
+  const chip = (label, value) => {
     const b = el('button', label);
     b.type = 'button';
-    if (dot) b.style.setProperty('--c', dot);
     b.setAttribute('aria-pressed', filter.cat === value);
     b.onclick = () => { filter.cat = filter.cat === value ? '' : value; buildFilters(); render(); };
     return b;
   };
   if (!cats.includes(filter.cat)) filter.cat = '';
-  $('cats').replaceChildren(chip('הכל', ''), ...cats.map((c, n) => chip(c, c, COLORS[n % COLORS.length])));
+  $('cats').replaceChildren(chip('הכל', ''), ...cats.map(c => chip(`${icon(c)} ${c}`, c)));
 
   const fill = (key, all, values) => {
     if (!values.includes(filter[key])) filter[key] = '';
@@ -112,7 +114,7 @@ function card(p) {
   node.style.setProperty('--c', color(p));
   node.classList.toggle('is-done', isDone);
   node.querySelector('h2').textContent = p.name;
-  node.querySelector('.meta').textContent = [p.cat, p.area].filter(Boolean).join(' · ');
+  node.querySelector('.meta').textContent = [p.cat && `${icon(p.cat)} ${p.cat}`, p.area].filter(Boolean).join(' · ');
   node.querySelector('.notes').textContent = p.notes;
   node.querySelector('.nav').href = navUrl(p);
 
@@ -138,7 +140,7 @@ function card(p) {
     link.href = navUrl(p); link.target = '_blank'; link.rel = 'noopener';
     pop.append(el('strong', p.name), document.createElement('br'), link);
     // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
-    const pin = dot(p.ll, 10, color(p), isDone ? 0.3 : 1, p.name);
+    const pin = dot(p.ll, 13, color(p), p.name, icon(p.cat), isDone ? 0.4 : 1);
     const open = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
     pin.addListener('click', () => {
       open();
@@ -155,10 +157,15 @@ function card(p) {
   return node;
 }
 
-function dot(position, scale, fillColor, fillOpacity, title) {
+// With an emoji: white disc, category-coloured ring. Without (my location): solid dot.
+function dot(position, scale, ring, title, emoji, opacity = 1) {
   const pin = new google.maps.Marker({
-    map, position, title,
-    icon: { path: google.maps.SymbolPath.CIRCLE, scale, fillColor, fillOpacity, strokeColor: '#fff', strokeWeight: 2 },
+    map, position, title, opacity,
+    label: emoji && { text: emoji, fontSize: '15px' },
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE, scale, fillOpacity: 1, strokeWeight: 2.5,
+      fillColor: emoji ? '#fff' : ring, strokeColor: emoji ? ring : '#fff',
+    },
   });
   pins.push(pin);
   return pin;
@@ -171,7 +178,7 @@ function render() {
   pins = [];
   info?.close();
   $('list').replaceChildren(...shown.map(card));
-  if (me && map) dot(me, 7, '#1a73e8', 1, 'אני כאן');
+  if (me && map) dot(me, 8, '#1a73e8', 'אני כאן');
 
   if (!loaded) return;
   $('status').textContent = [
