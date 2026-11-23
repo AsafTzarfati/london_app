@@ -94,8 +94,17 @@ select {
   font-size: 1rem; /* 16px: stops iOS zooming on focus */
 }
 
-#map { flex: none; height: 36dvh; direction: ltr; background: #e8e4dc; z-index: 0; }
-.leaflet-popup-content { font: inherit; font-size: .95rem; }
+#map {
+  flex: none;
+  display: grid; /* centres the "map needs internet" message */
+  place-items: center;
+  height: 36dvh;
+  direction: ltr;
+  background: #e8e4dc;
+  color: var(--muted);
+  z-index: 0;
+}
+.gm-style-iw { font: inherit; font-size: .95rem; }
 
 #status { margin: 0; padding: 8px 16px; color: var(--muted); font-size: .85rem; }
 

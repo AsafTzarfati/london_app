@@ -2,6 +2,10 @@
 // Until then the app reads the bundled places.csv.
 const CSV_URL = 'places.csv';
 
+// Browser key from Google Cloud, restricted to the site's URL and to the Maps JavaScript API.
+// Empty = Google's "for development purposes only" map.
+const GOOGLE_MAPS_KEY = '';
+
 // Pin colours, handed out to categories in order of first appearance in the sheet.
 const COLORS = ['#1f2430', '#c8102e', '#1d6fb8', '#e08a00', '#7b3fa0', '#2a8f6d', '#8a5a3c', '#d6478f'];
 
@@ -10,13 +14,33 @@ const done = new Set(JSON.parse(localStorage.getItem('london-done') || '[]')); /
 const filter = { cat: '', day: '', pri: '' };
 let places = [], cats = [], me = null, loaded = false;
 
-const map = L.map('map').setView([51.509, -0.126], 13);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  crossOrigin: true, // CORS tiles are cacheable by the service worker without opaque-response quota padding
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-}).addTo(map);
-const pins = L.layerGroup().addTo(map);
+let map = null, info = null, pins = [];
+
+// The map needs a connection (Google's terms forbid caching it); the list never waits for it.
+function loadMap() {
+  if (map || $('gmaps')) return;
+  if (!navigator.onLine) return void ($('map').textContent = 'המפה זמינה רק עם אינטרנט');
+  const s = document.createElement('script');
+  s.id = 'gmaps';
+  s.async = true;
+  // language=en: labels match the English street signs in London
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_KEY)}&language=en&region=GB&loading=async&callback=initMap`;
+  s.onerror = () => { s.remove(); $('map').textContent = 'המפה זמינה רק עם אינטרנט'; };
+  document.head.append(s);
+}
+
+window.initMap = async () => {
+  await Promise.all(['core', 'maps', 'marker'].map(lib => google.maps.importLibrary(lib)));
+  $('map').textContent = '';
+  map = new google.maps.Map($('map'), {
+    center: { lat: 51.509, lng: -0.126 }, zoom: 13,
+    gestureHandling: 'greedy', // one finger pans: the page itself doesn't scroll
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+  });
+  info = new google.maps.InfoWindow();
+  render();
+};
+window.gm_authFailure = () => { $('status').textContent = 'מפתח Google Maps לא תקין או לא מורשה לכתובת הזו'; };
 
 function toPlaces(text) {
   const [head = [], ...rows] = parseCSV(text);
@@ -34,7 +58,7 @@ function toPlaces(text) {
     return {
       name: get(r, 'name'), cat: get(r, 'cat'), area: get(r, 'area'), pri: get(r, 'pri'), day: get(r, 'day'),
       book: get(r, 'book'), dur: get(r, 'dur'), notes: get(r, 'notes'),
-      ll: Number.isFinite(lat) && Number.isFinite(lng) ? L.latLng(lat, lng) : null, // no coords: listed, not pinned
+      ll: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null, // no coords: listed, not pinned
     };
   });
 }
@@ -42,7 +66,13 @@ function toPlaces(text) {
 const uniq = key => [...new Set(places.map(p => p[key]).filter(Boolean))];
 const dayNum = d => { const m = d.match(/(\d+)\.(\d+)/); return m ? m[2] * 100 + +m[1] : 0; }; // "ו׳ 11.12" -> 1211
 const color = p => COLORS[Math.max(cats.indexOf(p.cat), 0) % COLORS.length];
-const dist = p => (me && p.ll ? me.distanceTo(p.ll) : Infinity);
+function metres(a, b) { // haversine
+  const rad = d => d * Math.PI / 180;
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+const dist = p => (me && p.ll ? metres(me, p.ll) : Infinity);
 const fmtDist = m => (m < 1000 ? `${Math.round(m / 10) * 10} מ׳` : `${(m / 1000).toFixed(1)} ק״מ`);
 const navUrl = p => 'https://www.google.com/maps/dir/?api=1&destination=' +
   encodeURIComponent(p.ll ? `${p.ll.lat},${p.ll.lng}` : `${p.name} London`);
@@ -101,32 +131,47 @@ function card(p) {
     render();
   };
 
-  if (p.ll) {
+  if (p.ll && map) {
     const pop = el('div', '');
     pop.dir = 'auto';
     const link = el('a', 'נווט ↗');
     link.href = navUrl(p); link.target = '_blank'; link.rel = 'noopener';
     pop.append(el('strong', p.name), document.createElement('br'), link);
-    const pin = L.circleMarker(p.ll, {
-      radius: 10, weight: 2, color: '#fff', fillColor: color(p), fillOpacity: isDone ? 0.3 : 1,
-    }).bindPopup(pop).addTo(pins);
-    pin.on('click', () => {
+    // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
+    const pin = dot(p.ll, 10, color(p), isDone ? 0.3 : 1, p.name);
+    const open = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
+    pin.addListener('click', () => {
+      open();
       node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       node.classList.add('flash');
       setTimeout(() => node.classList.remove('flash'), 1200);
     });
-    node.querySelector('.body').onclick = () => { map.setView(p.ll, Math.max(map.getZoom(), 15)); pin.openPopup(); };
+    node.querySelector('.body').onclick = () => {
+      map.panTo(p.ll);
+      map.setZoom(Math.max(map.getZoom(), 15));
+      open();
+    };
   }
   return node;
+}
+
+function dot(position, scale, fillColor, fillOpacity, title) {
+  const pin = new google.maps.Marker({
+    map, position, title,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale, fillColor, fillOpacity, strokeColor: '#fff', strokeWeight: 2 },
+  });
+  pins.push(pin);
+  return pin;
 }
 
 function render() {
   const shown = places.filter(p => ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]));
   if (me) shown.sort((a, b) => (dist(a) - dist(b)) || 0); // || 0: Infinity - Infinity is NaN
-  pins.clearLayers();
+  pins.forEach(pin => pin.setMap(null));
+  pins = [];
+  info?.close();
   $('list').replaceChildren(...shown.map(card));
-  if (me) L.circleMarker(me, { radius: 7, weight: 3, color: '#fff', fillColor: '#1a73e8', fillOpacity: 1 })
-    .bindPopup('אני כאן').addTo(pins);
+  if (me && map) dot(me, 7, '#1a73e8', 1, 'אני כאן');
 
   if (!loaded) return;
   $('status').textContent = [
@@ -159,12 +204,15 @@ $('near').onclick = () => {
   $('near').disabled = true;
   navigator.geolocation.getCurrentPosition(pos => {
     $('near').disabled = false;
-    me = L.latLng(pos.coords.latitude, pos.coords.longitude);
+    me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     render();
     $('list').scrollTop = 0;
     const nearest = places.filter(p => p.ll).sort((a, b) => dist(a) - dist(b))[0];
     // only move the map when actually in town, otherwise it zooms out to another country
-    if (nearest && dist(nearest) < 50000) map.fitBounds(L.latLngBounds([me, nearest.ll]).pad(0.4), { maxZoom: 16 });
+    if (map && nearest && dist(nearest) < 50000) {
+      map.fitBounds(new google.maps.LatLngBounds().extend(me).extend(nearest.ll), 60);
+      google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+    }
   }, () => {
     $('near').disabled = false;
     $('status').textContent = 'לא הצלחתי לקבל מיקום. בדקו הרשאות מיקום.';
@@ -172,7 +220,7 @@ $('near').onclick = () => {
 };
 
 $('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; render(); };
-addEventListener('online', load);
+addEventListener('online', () => { load(); loadMap(); });
 addEventListener('offline', render);
 
 if ('serviceWorker' in navigator) {
@@ -181,3 +229,4 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {}); // app still works online without it
 }
 load();
+loadMap();
