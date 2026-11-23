@@ -12,21 +12,6 @@
   --lift: 0 0 0 1px rgba(0, 0, 0, .03), 0 6px 20px rgba(0, 0, 0, .1);
   --peek: 96px;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #181818;
-    --card: #262626;
-    --ink: #f5f5f5;
-    --soft: #b0b0b0;
-    --line: #3d3d3d;
-    --tint: #333;
-    --accent: #ff5a76;
-    --on-accent: #1b0a0e;
-    --map-bg: #2b2b2b;
-    --lift: 0 0 0 1px rgba(255, 255, 255, .05), 0 6px 20px rgba(0, 0, 0, .45);
-  }
-}
 
 * { box-sizing: border-box; }
 ::selection { background: var(--accent); color: var(--on-accent); }
