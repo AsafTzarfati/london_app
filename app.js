@@ -172,8 +172,8 @@ function card(p) {
 }
 
 // Pins shrink as you zoom out; far out they're plain category-coloured dots so the map stays readable.
-const pinSize = zoom => zoom < 12.5 ? { scale: 4 } : zoom < 13.5 ? { scale: 8, font: 10 } :
-  zoom < 14.5 ? { scale: 10, font: 12 } : { scale: 13, font: 15 };
+const pinSize = zoom => zoom < 12.5 ? { scale: 4 } : zoom < 13.5 ? { scale: 5 } :
+  zoom < 14.5 ? { scale: 8, font: 10 } : zoom < 15.5 ? { scale: 10, font: 12 } : { scale: 13, font: 15 };
 
 function paint(pin) {
   const { ring, emoji } = pin.look;
@@ -256,7 +256,9 @@ addEventListener('offline', render);
 
 if ('serviceWorker' in navigator) {
   // First visit: the page loads before the worker controls it, so fetch once more to get the CSV into its cache.
-  if (!navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', load, { once: true });
+  // Later: a new worker means a new version was deployed, so reload onto it instead of showing the old one.
+  const update = navigator.serviceWorker.controller ? () => location.reload() : load;
+  navigator.serviceWorker.addEventListener('controllerchange', update, { once: true });
   navigator.serviceWorker.register('sw.js').catch(() => {}); // app still works online without it
 }
 load();
