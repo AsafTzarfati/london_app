@@ -1,5 +1,5 @@
-const CACHE = 'london-v7';
-const SHELL = ['./', 'style.css', 'csv.js', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'london-v8';
+const SHELL = ['./', 'style.css', 'csv.js', 'near.js', 'app.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e =>
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())));

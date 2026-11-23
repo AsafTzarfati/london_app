@@ -16,6 +16,7 @@ const $ = id => document.getElementById(id);
 const done = new Set(JSON.parse(localStorage.getItem('london-done') || '[]')); // keyed by place name: rows get reordered
 const filter = { cat: '', day: '', pri: '' };
 let places = [], cats = [], me = null, loaded = false;
+let notice = '', undo = null; // status-line message; the place just marked done
 
 let map = null, info = null, pins = [];
 
@@ -83,14 +84,8 @@ function toPlaces(text) {
 const uniq = key => [...new Set(places.map(p => p[key]).filter(Boolean))];
 const dayNum = d => { const m = d.match(/(\d+)\.(\d+)/); return m ? m[2] * 100 + +m[1] : 0; }; // "ו׳ 11.12" -> 1211
 const color = p => COLORS[Math.max(cats.indexOf(p.cat), 0) % COLORS.length];
-function metres(a, b) { // haversine
-  const rad = d => d * Math.PI / 180;
-  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 +
-    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
-  return 2 * 6371000 * Math.asin(Math.sqrt(h));
-}
 const dist = p => (me && p.ll ? metres(me, p.ll) : Infinity);
-const fmtDist = m => (m < 1000 ? `${Math.round(m / 10) * 10} מ׳` : `${(m / 1000).toFixed(1)} ק״מ`);
+const saveDone = () => localStorage.setItem('london-done', JSON.stringify([...done]));
 const navUrl = p => 'https://www.google.com/maps/dir/?api=1&destination=' +
   encodeURIComponent(p.ll ? `${p.ll.lat},${p.ll.lng}` : `${p.name} London`);
 
@@ -107,7 +102,7 @@ function buildFilters() {
     const b = el('button', label);
     b.type = 'button';
     b.setAttribute('aria-pressed', filter.cat === value);
-    b.onclick = () => { filter.cat = filter.cat === value ? '' : value; buildFilters(); render(); };
+    b.onclick = () => { filter.cat = filter.cat === value ? '' : value; undo = null; buildFilters(); render(); };
     return b;
   };
   if (!cats.includes(filter.cat)) filter.cat = '';
@@ -133,7 +128,7 @@ function card(p) {
   node.querySelector('.nav').href = navUrl(p);
 
   const tags = node.querySelector('.tags');
-  if (me && p.ll) tags.append(el('span', fmtDist(dist(p)), 'tag dist'));
+  if (me && p.ll) tags.append(el('span', fmtWalk(dist(p)), 'tag dist'));
   if (p.pri) tags.append(el('span', p.pri, p.pri === 'חובה' ? 'tag must' : 'tag'));
   if (p.day) tags.append(el('span', p.day, 'tag'));
   if (p.book === 'כן') tags.append(el('span', '🎟 להזמין מראש', 'tag book'));
@@ -143,7 +138,8 @@ function card(p) {
   box.checked = isDone;
   box.onchange = () => {
     done[box.checked ? 'add' : 'delete'](p.name);
-    localStorage.setItem('london-done', JSON.stringify([...done]));
+    saveDone();
+    undo = box.checked ? p.name : null; // near-me sorting moves the card away, so offer the way back
     render();
   };
 
@@ -195,22 +191,37 @@ function dot(position, ring, title, emoji, opacity = 1) {
   return pin;
 }
 
-function render() {
+function visible() {
   const shown = places.filter(p => ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]));
-  if (me) shown.sort((a, b) => (dist(a) - dist(b)) || 0); // || 0: Infinity - Infinity is NaN
+  return me ? rankNear(shown, p => done.has(p.name), dist) : shown;
+}
+
+function showStatus() {
+  if (!loaded && !notice) return;
+  const count = visible().length;
+  $('status').replaceChildren([
+    notice,
+    loaded && (count > 1 ? `${count} מקומות` : count ? 'מקום אחד' : 'אין מקומות שתואמים לסינון'),
+    loaded && `${places.filter(p => done.has(p.name)).length} בוצעו`,
+    loaded && me && !notice && 'הקרובים שטרם בוצעו קודם',
+    loaded && !navigator.onLine && 'אופליין – נתונים שמורים',
+  ].filter(Boolean).join(' · '));
+  if (!undo) return;
+  const back = el('button', 'בטל סימון', 'undo');
+  back.type = 'button';
+  back.setAttribute('aria-label', `בטל סימון של ${undo}`);
+  back.onclick = () => { done.delete(undo); saveDone(); undo = null; render(); };
+  $('status').append(' ', back);
+}
+
+function render() {
+  const shown = visible();
   pins.forEach(pin => pin.setMap(null));
   pins = [];
   info?.close();
   $('list').replaceChildren(...shown.map(card));
   if (me && map) dot(me, '#1a73e8', 'אני כאן');
-
-  if (!loaded) return;
-  $('status').textContent = [
-    shown.length > 1 ? `${shown.length} מקומות` : shown.length ? 'מקום אחד' : 'אין מקומות שתואמים לסינון',
-    `${places.filter(p => done.has(p.name)).length} בוצעו`,
-    me && 'ממוין לפי מרחק',
-    !navigator.onLine && 'אופליין – נתונים שמורים',
-  ].filter(Boolean).join(' · ');
+  showStatus();
 }
 
 async function load() {
@@ -231,26 +242,39 @@ async function load() {
 
 // ponytail: one fix per press, no live tracking and no "unsort" (reload restores sheet order). watchPosition if needed.
 $('near').onclick = () => {
-  if (!navigator.geolocation) return ($('status').textContent = 'הדפדפן לא תומך במיקום');
-  $('near').disabled = true;
+  const btn = $('near'), label = btn.textContent;
+  undo = null;
+  if (!navigator.geolocation) { notice = 'הדפדפן לא תומך במיקום'; return showStatus(); }
+  btn.disabled = true;
+  btn.textContent = 'מאתר…';
+  notice = 'מאתר מיקום…';
+  showStatus();
   navigator.geolocation.getCurrentPosition(pos => {
-    $('near').disabled = false;
+    btn.disabled = false;
+    btn.textContent = '📍 רענן מיקום';
+    notice = '';
     me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    // only move the map when actually in town, otherwise it zooms out to another country
+    const inTown = places.some(p => p.ll && metres(me, p.ll) < 50000);
+    if (map && !inTown) notice = 'המיקום רחוק מלונדון, המפה לא זזה';
     render();
     $('list').scrollTop = 0;
-    const nearest = places.filter(p => p.ll).sort((a, b) => dist(a) - dist(b))[0];
-    // only move the map when actually in town, otherwise it zooms out to another country
-    if (map && nearest && dist(nearest) < 50000) {
-      map.fitBounds(new google.maps.LatLngBounds().extend(me).extend(nearest.ll), 60);
-      google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
-    }
-  }, () => {
-    $('near').disabled = false;
-    $('status').textContent = 'לא הצלחתי לקבל מיקום. בדקו הרשאות מיקום.';
+    if (!map || !inTown) return;
+    const next = visible().find(p => p.ll && !done.has(p.name));
+    if (!next) return map.panTo(me);
+    map.fitBounds(new google.maps.LatLngBounds().extend(me).extend(next.ll), 60);
+    google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+  }, err => {
+    btn.disabled = false;
+    btn.textContent = label;
+    notice = err.code === 1
+      ? 'אין הרשאת מיקום. טענו מחדש ואשרו, או בדקו בהגדרות האייפון'
+      : 'לא הצלחתי לאתר מיקום. נסו שוב בעוד רגע';
+    showStatus();
   }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
 };
 
-$('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; render(); };
+$('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; undo = null; render(); };
 addEventListener('online', () => { load(); loadMap(); });
 addEventListener('offline', render);
 

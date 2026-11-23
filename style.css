@@ -42,9 +42,11 @@ h1 span { font-weight: 400; opacity: .85; unicode-bidi: isolate; }
   color: var(--red);
   font: inherit;
   font-weight: 700;
+  min-width: 9rem; /* the label changes while locating: keep the header still */
+  white-space: nowrap;
   cursor: pointer;
 }
-#near:disabled { opacity: .6; }
+#near:disabled { opacity: .75; }
 
 nav { padding: 10px 0 8px; border-bottom: 1px solid var(--line); background: var(--card); }
 
@@ -114,6 +116,18 @@ body.map-full #map { position: fixed !important; inset: 0; height: 100dvh; z-ind
 body.map-full .map-full-btn { margin-top: calc(10px + env(safe-area-inset-top)); }
 
 #status { margin: 0; padding: 8px 16px; color: var(--muted); font-size: .85rem; }
+.undo { /* 44px tall tap target without growing the line */
+  margin: -12px 0;
+  border: 0;
+  padding: 12px 6px;
+  background: none;
+  color: var(--red);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 
 #list {
   flex: 1;
