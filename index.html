@@ -15,7 +15,6 @@
 <body>
   <header>
     <h1>לונדון <small dir="ltr">10–15.12</small></h1>
-    <button id="mapOpen" type="button">מפה</button>
   </header>
   <div class="valance" aria-hidden="true"></div>
 
@@ -26,6 +25,8 @@
       <select id="pri" aria-label="עדיפות"></select>
     </div>
   </nav>
+
+  <div id="map"></div>
 
   <section id="sign" aria-labelledby="signName">
     <p id="signLabel" hidden>הכי קרוב עכשיו</p>
@@ -41,9 +42,6 @@
 
   <p id="status" role="status">טוען…</p>
   <main id="list"></main>
-
-  <div id="map"></div>
-  <button id="mapClose" type="button">סגור מפה</button>
 
   <template id="card">
     <article class="card">

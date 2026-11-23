@@ -68,15 +68,6 @@ header {
 }
 h1 { margin: 0; font: 400 1.9rem/1 var(--sign-font); }
 h1 small { display: block; margin-top: 5px; font: 600 .82rem/1 system-ui, -apple-system, sans-serif; text-align: right; }
-#mapOpen {
-  min-height: 44px;
-  border: 2px solid var(--gold);
-  border-radius: 999px;
-  padding: 0 20px;
-  background: none;
-  color: var(--gold);
-  font-weight: 800;
-}
 
 .valance {
   height: 13px;
@@ -240,33 +231,30 @@ select {
   text-decoration: none;
 }
 
-#map { display: none; direction: ltr; }
-#mapClose { display: none; }
-/* !important: Google sets position:relative inline on the map container */
-body.map-full #map {
+#map {
   display: grid; /* centres the "map needs internet" message */
   place-items: center;
-  position: fixed !important;
-  inset: 0;
-  z-index: 1000;
-  background: var(--bg);
+  height: 36dvh;
+  direction: ltr;
+  background: var(--line);
   color: var(--soft);
+  z-index: 0;
 }
-body.map-full #mapClose {
-  display: block;
-  position: fixed;
-  top: calc(10px + env(safe-area-inset-top));
-  right: 10px;
-  z-index: 1001;
+/* !important: Google sets position:relative inline on the map container */
+body.map-full #map { position: fixed !important; inset: 0; height: 100dvh; z-index: 1000; }
+.map-full-btn {
   min-height: 44px;
+  margin: 10px;
   border: 0;
   border-radius: 999px;
-  padding: 0 18px;
+  padding: 0 16px;
   background: var(--green);
   color: var(--gold);
-  font-weight: 800;
+  font: 800 .9rem system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+  cursor: pointer;
 }
+body.map-full .map-full-btn { margin-top: calc(10px + env(safe-area-inset-top)); }
 .gm-style-iw { font: inherit; font-size: .95rem; }
 
 @media (prefers-color-scheme: dark) {

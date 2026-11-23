@@ -44,21 +44,32 @@ window.initMap = async () => {
   });
   info = new google.maps.InfoWindow();
   map.addListener('zoom_changed', () => pins.forEach(paint));
+
+  // CSS full screen: iPhone Safari has no Fullscreen API, so Google's own button doesn't work there
+  const full = el('button', '⛶ מסך מלא', 'map-full-btn');
+  full.type = 'button';
+  full.setAttribute('aria-pressed', 'false');
+  full.onclick = () => {
+    const center = map.getCenter();
+    const on = document.body.classList.toggle('map-full');
+    full.textContent = on ? '✕ סגור מפה' : '⛶ מסך מלא';
+    full.setAttribute('aria-pressed', on);
+    requestAnimationFrame(() => map.setCenter(center));
+  };
+  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(full);
   render();
   showOnMap();
 };
 
-// CSS full screen: iPhone Safari has no Fullscreen API. Google loads on first open, so a list-only visit costs no map load.
-function openMap(place) {
+function focusOnMap(place) {
   focusName = place?.name || null;
-  document.body.classList.add('map-full');
-  loadMap();
+  scrollTo({ top: 0, behavior: 'smooth' }); // the map sits above the list
   showOnMap();
 }
 
 function showOnMap() {
-  if (!map || !document.body.classList.contains('map-full')) return;
-  requestAnimationFrame(() => { // after the map has its full-screen size
+  if (!map) return;
+  requestAnimationFrame(() => {
     const place = focusName && places.find(p => p.name === focusName);
     focusName = null;
     if (place?.ll) {
@@ -172,7 +183,7 @@ function card(p) {
     render();
   };
 
-  if (p.ll) node.querySelector('.body').onclick = () => openMap(p);
+  if (p.ll) node.querySelector('.body').onclick = () => focusOnMap(p);
   if (p.ll && map) {
     const pop = el('div', '');
     pop.dir = 'auto';
@@ -298,6 +309,7 @@ $('near').onclick = () => {
     reframe = inLondon(); // only move the map when in town, otherwise it zooms out to another country
     render();
     scrollTo(0, 0);
+    showOnMap();
   }, err => {
     locating = false;
     notice = err.code === 1
@@ -315,12 +327,10 @@ $('signDone').onclick = () => {
   undo = signPlace.name;
   render();
 };
-$('signMap').onclick = () => openMap(signPlace);
-$('mapOpen').onclick = () => openMap();
-$('mapClose').onclick = () => { document.body.classList.remove('map-full'); $('mapOpen').focus(); };
+$('signMap').onclick = () => focusOnMap(signPlace);
 
 $('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; undo = null; render(); };
-addEventListener('online', () => { load(); if (document.body.classList.contains('map-full')) loadMap(); });
+addEventListener('online', () => { load(); loadMap(); });
 addEventListener('offline', render);
 
 if ('serviceWorker' in navigator) {
@@ -332,3 +342,4 @@ if ('serviceWorker' in navigator) {
 }
 renderSign();
 load();
+loadMap();
