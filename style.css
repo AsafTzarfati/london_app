@@ -378,7 +378,8 @@ select {
 /* Route editor: the header and the list make way, the map fills what's under the panel. */
 #editor, #edInfo { display: none; }
 body.editing .top, body.editing #sheet, body.editing .map-full-btn { display: none; }
-body.editing #map { top: var(--etop, 200px); height: auto !important; bottom: 0; } /* beats sizeMap's inline height */
+/* The map runs full screen under the panel, like Google Maps; fitRoute pads the route clear of it. */
+body.editing #map { top: 0; height: auto !important; bottom: 0; } /* beats sizeMap's inline height */
 body.editing #editor {
   position: fixed;
   inset: 0 0 auto;
@@ -402,64 +403,98 @@ body.editing #editor {
   font-size: 16px;
   font-weight: 700;
 }
+/* The name reads as the screen's title; the pencil says it can be changed. */
+.ed-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--soft); }
 #edName {
   flex: 1;
   min-width: 0;
   height: 44px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 0 10px;
-  background: var(--tint);
-  font-size: 18px;
-  font-weight: 700;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0 2px;
+  background: none;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.01em;
 }
-#edName:focus { border-color: var(--ink); outline: 0; background: var(--card); }
-#edStops { max-height: 38dvh; margin: 6px 0 0; padding: 0; overflow-y: auto; list-style: none; overscroll-behavior: contain; }
-#edStops li { display: flex; align-items: center; gap: 10px; min-height: 48px; padding-inline-start: 4px; background: var(--bg); transition: transform .15s; }
-#edStops li.dragging { transition: none; }
-#edStops .name { cursor: pointer; }
-#edStops li + li { border-top: 1px solid var(--tint); }
-#edStops li.dragging { position: relative; z-index: 1; border-radius: 12px; box-shadow: var(--lift); }
-#edStops .num {
+#edName:focus { border-color: var(--ink); outline: 0; }
+.ed-title:focus-within svg { visibility: hidden; }
+
+/* Stops as a timeline, like Google Maps directions: numbered points on one dotted line, ending in "add". */
+#edStops { max-height: 38dvh; margin: 4px 0 0; padding: 0; overflow-y: auto; list-style: none; overscroll-behavior: contain; }
+#edStops li, .ed-add { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; }
+#edStops li { background: var(--bg); transition: transform .15s; }
+#edStops li::before, .ed-add::before { /* the line between the points, behind them */
+  content: '';
+  position: absolute;
+  inset-inline-start: 13px;
+  top: 0;
+  bottom: 0;
+  border-inline-start: 2px dotted #c4c4c4;
+}
+#edStops li:first-child::before { top: 50%; }
+.ed-add::before { bottom: 50%; }
+#edStops:empty + .ed-add::before, #edStops li.dragging::before { display: none; }
+#edStops li.dragging { z-index: 1; border-radius: 14px; box-shadow: var(--lift); transition: none; }
+#editor .num {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--accent);
   color: var(--on-accent);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
+  box-shadow: 0 0 0 3px var(--bg); /* cuts the dotted line cleanly */
 }
-#edStops .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#edStops button {
+#edStops .name {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  border: 0;
+  padding: 0;
+  background: none;
+  text-align: start;
+}
+#edStops .name strong, #edStops .name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edStops .name strong { font-size: 16px; font-weight: 600; }
+#edStops .name small { margin-top: 1px; color: var(--soft); font-size: 13px; }
+#edStops li > button:not(.name) {
   flex: none;
   display: grid;
   place-items: center;
-  width: 44px;
+  width: 40px;
   height: 44px;
   border: 0;
+  border-radius: 10px;
   background: none;
-  color: var(--soft);
-  font-size: 20px;
+  color: #8a8a8a;
+  font-size: 18px;
+  transition: background .12s, color .12s;
 }
-#edStops .grip { cursor: grab; touch-action: none; } /* the finger drags the stop, not the list */
-#edStops .hint { color: var(--soft); font-size: 14px; }
-.ed-add { position: relative; margin-top: 6px; }
+#edStops li > button:not(.name):hover { background: var(--tint); color: var(--ink); }
+#edStops li > button:not(.name):active { transform: scale(.92); }
+#edStops .grip { font-size: 22px; cursor: grab; touch-action: none; } /* the finger drags the stop, not the list */
+#editor .ed-add .num { background: var(--bg); color: var(--accent); border: 2px solid var(--accent); font-size: 18px; font-weight: 600; }
 #edQ {
-  width: 100%;
-  height: 46px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0 16px;
-  background: var(--card);
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0 2px;
+  background: none;
   font-size: 16px; /* stops iOS zooming on focus */
   -webkit-appearance: none;
   appearance: none;
 }
-#edQ::placeholder { color: var(--ink); font-weight: 600; opacity: 1; }
+#edQ::placeholder { color: var(--accent); font-weight: 700; opacity: 1; }
 #edQ:focus { border-color: var(--ink); outline: 0; }
+#edQ:focus::placeholder { color: var(--soft); font-weight: 400; }
 #edResults {
   position: absolute;
   inset: calc(100% + 6px) 0 auto;

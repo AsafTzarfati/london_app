@@ -103,7 +103,8 @@ async function drawRoute(stops) {
 const fitRoute = () => requestAnimationFrame(() => requestAnimationFrame(() => {
   const pts = stopsOf(route()).filter(p => p.ll);
   if (!map || !pts.length) return;
-  map.fitBounds(pts.reduce((b, p) => b.extend(p.ll), new google.maps.LatLngBounds()), 60);
+  const pad = editing ? { top: $('editor').offsetHeight + 40, bottom: 90, left: 40, right: 40 } : 60; // the editor floats over the map
+  map.fitBounds(pts.reduce((b, p) => b.extend(p.ll), new google.maps.LatLngBounds()), pad);
   google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
 }));
 
@@ -384,11 +385,12 @@ function paint(pin) {
   // my location keeps its size; route stops keep their number at every zoom
   const { scale, font } = !emoji ? { scale: 8 } : stop ? { scale: 12, font: 14 } : pinSize(map.getZoom());
   const withIcon = emoji && font;
-  pin.setLabel(withIcon ? { text: emoji, fontSize: `${font}px`, fontWeight: stop ? '700' : '400' } : null);
+  pin.setLabel(withIcon ? { text: emoji, fontSize: `${font}px`, fontWeight: stop ? '700' : '400', color: stop ? '#fff' : '#000' } : null);
   if (withIcon) {
-    // a white disc with a soft shadow; the classic Marker's vector symbols can't cast one
+    // a white disc with a soft shadow (a stop: red with a white ring, like its number in the list); the classic Marker's vector symbols can't cast one
     const size = scale * 2 + 10, c = size / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><defs><filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dy="1.5" stdDeviation="1.8" flood-opacity=".32"/></filter></defs><circle cx="${c}" cy="${c}" r="${scale}" fill="#fff" filter="url(#s)"/></svg>`;
+    const disc = stop ? 'fill="#d81e3f" stroke="#fff" stroke-width="2"' : 'fill="#fff"';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><defs><filter id="s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dy="1.5" stdDeviation="1.8" flood-opacity=".32"/></filter></defs><circle cx="${c}" cy="${c}" r="${scale}" ${disc} filter="url(#s)"/></svg>`;
     pin.setIcon({
       url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
       scaledSize: new google.maps.Size(size, size),
@@ -610,11 +612,15 @@ function renderEditor() {
   const r = route();
   if (!r) return;
   if (document.activeElement !== $('edName')) $('edName').value = r.name;
-  $('edStops').replaceChildren(...stopsOf(r).map((p, i) => {
+  $('edStops').replaceChildren(...stopsOf(r).map((p, i, all) => {
     const li = document.createElement('li');
     li.dataset.name = p.name;
-    const name = el('span', p.name, 'name');
-    name.dir = 'auto';
+    const name = el('button', '', 'name');
+    name.type = 'button';
+    const title = el('strong', p.name);
+    title.dir = 'auto';
+    const prev = all[i - 1]; // the leg from the stop before: what a walker plans by
+    name.append(title, el('small', [p.cat, prev?.ll && p.ll ? fmtWalk(metres(prev.ll, p.ll)) : p.area].filter(Boolean).join(' · ')));
     name.onclick = () => { if (p.ll && map) { map.panTo(p.ll); p.openPin?.(); } };
     const grip = el('button', '≡', 'grip');
     grip.type = 'button';
@@ -631,7 +637,7 @@ function renderEditor() {
     del.type = 'button';
     del.setAttribute('aria-label', `הסר את ${p.name} מהמסלול`);
     del.onclick = () => editStops(r.stops.filter(n => n !== p.name));
-    li.append(el('span', i + 1, 'num'), name, grip, del);
+    li.append(el('span', i + 1, 'num'), name, del, grip);
     return li;
   }));
   if (!$('edResults').hidden) showResults();
@@ -714,7 +720,7 @@ $('edName').onchange = () => {
 $('edName').onkeydown = e => { if (e.key === 'Enter') $('edName').blur(); };
 $('edBack').onclick = () => (history.state?.editor ? history.back() : closeEditor());
 addEventListener('popstate', closeEditor);
-new ResizeObserver(() => document.documentElement.style.setProperty('--etop', `${$('editor').offsetHeight}px`)).observe($('editor'));
+new ResizeObserver(() => { if (editing) fitRoute(); }).observe($('editor')); // the panel grew or shrank: keep the route in the map's open part
 $('routeShare').onclick = async () => {
   const r = route();
   if (!r) return;
