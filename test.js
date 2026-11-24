@@ -8,6 +8,8 @@ assert.deepStrictEqual(parseCSV(''), []);
 
 const rows = parseCSV(require('fs').readFileSync(__dirname + '/places.csv', 'utf8'));
 assert.ok(rows.length > 1 && rows.every(r => r.length === rows[0].length), 'places.csv rows are ragged');
+const idCol = rows[0].indexOf('place_id');
+assert.ok(idCol > 0 && rows.slice(1).every(r => /^(ChIJ[\w-]+)?$/.test(r[idCol])), 'bad place_id in places.csv');
 
 const { metres, rankNear, walkParts, fmtWalk, hasChoice } = require('./near.js');
 assert.strictEqual(hasChoice([{ k: '' }, { k: '' }], 'k'), false); // empty column

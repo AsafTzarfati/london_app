@@ -2,7 +2,7 @@
 // Until then the app reads the bundled places.csv.
 const CSV_URL = 'places.csv';
 
-// Browser key from Google Cloud, restricted to the site's URL and to the Maps JavaScript API.
+// Browser key from Google Cloud, restricted to the site's URL, the Maps JavaScript API and Places API (New).
 // Empty = Google's "for development purposes only" map.
 const GOOGLE_MAPS_KEY = 'AIzaSyCuaFAjkEVs484S_EaapYjgq1AQCFSxenE';
 
@@ -35,7 +35,7 @@ function loadMap() {
 }
 
 window.initMap = async () => {
-  await Promise.all(['core', 'maps', 'marker'].map(lib => google.maps.importLibrary(lib)));
+  await Promise.all(['core', 'maps', 'marker', 'places'].map(lib => google.maps.importLibrary(lib)));
   $('map').textContent = '';
   map = new google.maps.Map($('map'), {
     center: { lat: 51.509, lng: -0.126 }, zoom: 13,
@@ -155,6 +155,7 @@ function toPlaces(text) {
   const i = {
     name: col('שם'), cat: col('קטגוריה'), area: col('אזור'), pri: col('עדיפות'), day: col('יום'),
     book: col('הזמנה מראש'), dur: col('משך משוער'), notes: col('הערות'), lat: col('Latitude'), lng: col('Longitude'),
+    id: col('place_id'),
   };
   if (i.name < 0) throw new Error('not the places sheet');
   // LRM marks around an en dash between digits: without them RTL shows "10:00–22:00" as "22:00–10:00"
@@ -163,7 +164,7 @@ function toPlaces(text) {
     const lat = parseFloat(get(r, 'lat')), lng = parseFloat(get(r, 'lng'));
     return {
       name: get(r, 'name'), cat: get(r, 'cat'), area: get(r, 'area'), pri: get(r, 'pri'), day: get(r, 'day'),
-      book: get(r, 'book'), dur: get(r, 'dur'), notes: get(r, 'notes'),
+      book: get(r, 'book'), dur: get(r, 'dur'), notes: get(r, 'notes'), id: get(r, 'id'),
       ll: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null, // no coords: listed, not pinned
     };
   });
@@ -176,8 +177,37 @@ const dist = p => (me && p.ll ? metres(me, p.ll) : Infinity);
 const inLondon = () => !!me && places.some(p => p.ll && metres(me, p.ll) < 50000);
 const nextPlace = () => (inLondon() ? visible().find(p => p.ll && !done.has(p.name)) : undefined);
 const saveDone = () => localStorage.setItem('london-done', JSON.stringify([...done]));
+// With a place ID Google opens the business itself (hours, reviews); coordinates alone open a bare pin.
 const navUrl = p => 'https://www.google.com/maps/dir/?api=1&destination=' +
-  encodeURIComponent(p.ll ? `${p.ll.lat},${p.ll.lng}` : `${p.name} London`);
+  encodeURIComponent(p.id ? p.name : p.ll ? `${p.ll.lat},${p.ll.lng}` : `${p.name} London`) +
+  (p.id ? `&destination_place_id=${encodeURIComponent(p.id)}` : '');
+
+// The place's first Google photo. Fetched live, never stored (Google's terms), and only once its card is on screen.
+// ponytail: one Place Details + one photo request per place per page load; watch the Places quota if that adds up
+const photos = new Map(); // place ID -> Promise<photo | null>, survives re-renders and the CSV reload
+const onScreen = new IntersectionObserver(entries => entries.forEach(e => {
+  if (!e.isIntersecting) return;
+  onScreen.unobserve(e.target);
+  showPhoto(e.target);
+}), { rootMargin: '200px' });
+
+async function showPhoto(thumb) {
+  const id = thumb.dataset.id;
+  if (!photos.has(id)) photos.set(id, new google.maps.places.Place({ id }).fetchFields({ fields: ['photos'] })
+    .then(({ place }) => place.photos?.[0] || null).catch(() => null));
+  const photo = await photos.get(id);
+  if (!photo) return; // no photo or offline: the category icon stays
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = photo.getURI({ maxWidth: 200, maxHeight: 200 });
+  img.onload = () => {
+    const by = photo.authorAttributions?.[0];
+    const credit = el(by?.uri ? 'a' : 'span', by ? by.displayName : 'Google', 'credit');
+    if (by?.uri) { credit.href = by.uri; credit.target = '_blank'; credit.rel = 'noopener'; }
+    thumb.removeAttribute('aria-hidden'); // the credit link must stay reachable
+    thumb.replaceChildren(img, credit);
+  };
+}
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -214,7 +244,9 @@ function card(p) {
   const isDone = done.has(p.name);
   node.classList.toggle('is-done', isDone);
   node.style.setProperty('--c', color(p));
-  node.querySelector('.thumb').textContent = icon(p.cat);
+  const thumb = node.querySelector('.thumb');
+  thumb.textContent = icon(p.cat);
+  if (p.id && map) { thumb.dataset.id = p.id; onScreen.observe(thumb); }
   node.querySelector('h3').textContent = p.name;
   node.querySelector('.meta').textContent = [p.cat, p.area].filter(Boolean).join(' · ');
   node.querySelector('.notes').textContent = p.notes;
