@@ -47,6 +47,7 @@
             <h2 id="routeName" dir="auto"></h2>
             <p id="routeMeta"></p>
           </div>
+          <button id="routeEdit" type="button">ערוך</button>
           <button id="routeShare" type="button">שתף</button>
           <button id="routeDel" type="button">מחק</button>
         </section>
@@ -67,6 +68,23 @@
     </div>
   </div>
 
+  <!-- Route editor: a full-screen mode over the same map (body.editing) -->
+  <section id="editor" aria-label="עריכת מסלול">
+    <div class="ed-head">
+      <button id="edBack" type="button" aria-label="סיום עריכה, חזרה לרשימה">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        סיום
+      </button>
+      <input id="edName" dir="auto" maxlength="60" autocomplete="off" enterkeyhint="done" aria-label="שם המסלול">
+    </div>
+    <ol id="edStops"></ol>
+    <div class="ed-add">
+      <input id="edQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="+ הוספת עצירה…" aria-label="הוספת עצירה: חיפוש מקום" aria-controls="edResults">
+      <ul id="edResults" hidden></ul>
+    </div>
+  </section>
+  <p id="edInfo" role="status"></p>
+
   <template id="card">
     <article class="card">
       <span class="thumb" aria-hidden="true"></span>
@@ -76,7 +94,6 @@
         <p class="walk" hidden></p>
         <p class="tags"></p>
         <p class="notes"></p>
-        <p class="route-ctl"></p>
       </div>
       <div class="actions">
         <label class="done"><input type="checkbox"></label>

@@ -20,7 +20,7 @@ let notice = '', undo = null; // status-line message; the place just marked done
 
 // Routes are built on this phone and travel to the others as a link (no backend).
 let routes = JSON.parse(localStorage.getItem('london-routes') || '[]'), routeName = localStorage.getItem('london-route') || '';
-let routeLine = [], lineKey = '', routeInfo = '';
+let routeLine = [], lineKey = '', routeInfo = '', editing = false;
 const NEW_ROUTE = '\u0000new';
 const route = () => routes.find(r => r.name === routeName);
 const stopsOf = r => (r ? r.stops.map(n => places.find(p => p.name === n)).filter(Boolean) : []);
@@ -99,12 +99,13 @@ async function drawRoute(stops) {
   renderRouteBar();
 }
 
-function fitRoute() {
+// Two frames late: opening or closing the editor resizes the map, and Google must see the new size first.
+const fitRoute = () => requestAnimationFrame(() => requestAnimationFrame(() => {
   const pts = stopsOf(route()).filter(p => p.ll);
   if (!map || !pts.length) return;
   map.fitBounds(pts.reduce((b, p) => b.extend(p.ll), new google.maps.LatLngBounds()), 60);
   google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
-}
+}));
 
 // Bottom sheet: three resting places over the map.
 const sheet = $('sheet'), sheetBody = $('sheetBody');
@@ -300,9 +301,11 @@ function renderRouteBar() {
   $('routeBar').hidden = !r;
   if (!r) return;
   const n = stopsOf(r).length;
+  const meta = [n === 1 ? 'עצירה אחת' : `${n} עצירות`, routeInfo].filter(Boolean).join(' · ');
   $('routeName').textContent = r.name;
-  $('routeMeta').textContent = !n ? 'הוסיפו מקומות עם + מהרשימה למטה'
-    : [n === 1 ? 'תחנה אחת' : `${n} תחנות`, routeInfo].filter(Boolean).join(' · ');
+  $('routeMeta').textContent = n ? meta : 'אין עדיין עצירות';
+  $('edInfo').textContent = n ? meta : 'חפשו מקום או הקישו על סיכה במפה';
+  $('routeEdit').setAttribute('aria-label', `ערוך את המסלול ${r.name}`);
   $('routeShare').setAttribute('aria-label', `שתף את המסלול ${r.name}`);
   $('routeDel').setAttribute('aria-label', `מחק את המסלול ${r.name}`);
 }
@@ -311,9 +314,8 @@ function renderRouteBar() {
 function card(p, i) {
   const node = $('card').content.firstElementChild.cloneNode(true);
   const isDone = done.has(p.name);
-  const r = route(), isStop = i !== undefined;
   node.classList.toggle('is-done', isDone);
-  if (isStop) node.dataset.n = i + 1;
+  if (i !== undefined) node.dataset.n = i + 1;
   node.style.setProperty('--c', color(p));
   const thumb = node.querySelector('.thumb');
   thumb.textContent = icon(p.cat);
@@ -347,37 +349,30 @@ function card(p, i) {
     render();
   };
 
-  if (r) {
-    const btn = (label, aria, stops, cls) => {
-      const b = el('button', label, cls);
-      b.type = 'button';
-      b.setAttribute('aria-label', aria);
-      b.disabled = !stops;
-      b.onclick = e => { e.stopPropagation(); r.stops = stops; saveRoutes(); undo = null; render(); };
-      return b;
-    };
-    const at = r.stops.indexOf(p.name), last = r.stops.length - 1;
-    node.querySelector('.route-ctl').append(...(isStop ? [
-      btn('↑', `הקדם את ${p.name} במסלול`, at > 0 && moveStop(r.stops, at, -1)),
-      btn('↓', `דחה את ${p.name} במסלול`, at < last && moveStop(r.stops, at, 1)),
-      btn('✕', `הסר את ${p.name} מהמסלול`, r.stops.filter(n => n !== p.name)),
-    ] : [btn('+ למסלול', `הוסף את ${p.name} למסלול ${r.name}`, [...r.stops, p.name], 'add')]));
-  }
-
   if (p.ll) node.querySelector('.body').onclick = () => focusOnMap(p);
-  if (p.ll && map) {
-    const pop = el('div', '');
-    pop.dir = 'auto';
-    const link = el('a', 'נווט ↗');
-    link.href = navUrl(p); link.target = '_blank'; link.rel = 'noopener';
-    pop.append(el('strong', p.name), document.createElement('br'), link);
-    // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
-    const pin = isStop ? dot(p.ll, color(p), p.name, String(i + 1), isDone ? 0.5 : 1, true)
-      : dot(p.ll, color(p), p.name, icon(p.cat), isDone || r ? 0.4 : 1); // a route dims everything else
-    p.openPin = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
-    pin.addListener('click', p.openPin);
-  }
   return node;
+}
+
+// The place's pin and its popup. i = position in the active route (numbered pin); undefined = not a stop.
+function pinFor(p, i) {
+  if (!p.ll || !map) return;
+  const r = route(), isStop = i !== undefined, isDone = done.has(p.name);
+  const pop = el('div', '');
+  pop.dir = 'auto';
+  const link = el('a', 'נווט ↗');
+  link.href = navUrl(p); link.target = '_blank'; link.rel = 'noopener';
+  pop.append(el('strong', p.name), document.createElement('br'), link);
+  if (editing && r) { // the editor: a pin adds or removes its place
+    const act = el('button', isStop ? 'הסר מהמסלול' : '+ הוסף למסלול', isStop ? 'pin-act out' : 'pin-act');
+    act.type = 'button';
+    act.onclick = () => editStops(isStop ? r.stops.filter(n => n !== p.name) : [...r.stops, p.name]);
+    pop.append(act);
+  }
+  // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
+  const pin = isStop ? dot(p.ll, color(p), p.name, String(i + 1), isDone ? 0.5 : 1, true)
+    : dot(p.ll, color(p), p.name, icon(p.cat), isDone || (r && !editing) ? 0.4 : 1); // a route dims everything else
+  p.openPin = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
+  pin.addListener('click', p.openPin);
 }
 
 // Pins shrink as you zoom out; far out they're plain category-coloured dots so the map stays readable.
@@ -413,18 +408,18 @@ function dot(position, ring, title, emoji, opacity = 1, stop = false) {
   return pin;
 }
 
-// The filtered list. With a route on, its stops are left out: they're listed above, in route order.
+// The filtered places. A route's stops are left out (they have their own numbered pins and cards);
+// the editor ignores the main screen's filters, so every place can be added.
 function visible() {
-  const q = query.trim().toLowerCase();
   const stops = route()?.stops || [];
-  const shown = places.filter(p => !stops.includes(p.name) && ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]) &&
-    (!q || `${p.name} ${p.cat} ${p.area} ${p.notes}`.toLowerCase().includes(q)));
+  const shown = places.filter(p => !stops.includes(p.name) &&
+    (editing || (['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]) && matches(p, query))));
   return me ? rankNear(shown, p => done.has(p.name), dist) : shown;
 }
 
 function showStatus() {
   if (!loaded && !notice) return;
-  const count = visible().length;
+  const count = route() ? stopsOf(route()).length : visible().length;
   $('status').replaceChildren([
     notice,
     loaded && (count > 1 ? `${count} מקומות` : count ? 'מקום אחד' : 'אין מקומות שתואמים לסינון'),
@@ -464,14 +459,14 @@ function render() {
   pins.forEach(pin => pin.setMap(null));
   pins = [];
   info?.close();
-  const nodes = shown.map(p => card(p)); // every place gets its pin, including the one on the sign
-  // A route keeps its numbered stops whole (the next one is on the sign too), then the places to add.
-  $('list').replaceChildren(...(r
-    ? [...stops.map(card), ...(nodes.length ? [el('h3', 'להוסיף למסלול', 'divider'), ...nodes] : [])]
-    : nodes.filter((_, i) => shown[i] !== next)));
+  stops.forEach((p, i) => pinFor(p, i));
+  shown.forEach(p => pinFor(p)); // every place gets its pin, including the one on the sign
   if (me && map) dot(me, '#1a73e8', 'אני כאן');
+  // A route lists only its numbered stops, all of them (the next one is on the sign too).
+  if (!editing) $('list').replaceChildren(...(r ? stops.map(card) : shown.filter(p => p !== next).map(p => card(p))));
   drawRoute(stops);
   renderRouteBar();
+  if (editing) renderEditor();
   renderSign();
   showStatus();
 }
@@ -571,11 +566,155 @@ function showRoute(name) {
 }
 $('route').onchange = e => {
   if (e.target.value !== NEW_ROUTE) return showRoute(e.target.value);
-  const name = prompt('שם המסלול, למשל: יום ב׳ – סוהו')?.trim().slice(0, 60);
-  if (!name) return buildRoutes(); // cancelled: back to what was selected
-  if (!routes.some(r => r.name === name)) routes.push({ name, stops: [] }); // an existing name just opens that route
-  showRoute(name);
+  let name = 'מסלול חדש', k = 2; // renamed in the editor's header
+  while (routes.some(r => r.name === name)) name = `מסלול חדש ${k++}`;
+  routes.push({ name, stops: [] });
+  openEditor(name);
+  $('edQ').focus(); // an empty route starts from the list of places
 };
+$('routeEdit').onclick = () => openEditor(routeName);
+
+// ── Route editor: stops on top, the map with the route under them ──
+function openEditor(name) {
+  routeName = name;
+  saveRoutes();
+  editing = true;
+  document.body.classList.add('editing');
+  history.pushState({ editor: true }, ''); // iPhone swipe-back closes the editor, not the app
+  render();
+  fitRoute();
+}
+
+function closeEditor() {
+  if (!editing) return;
+  editing = false;
+  document.body.classList.remove('editing');
+  $('edQ').value = '';
+  $('edResults').hidden = true;
+  buildRoutes();
+  render();
+  setSheet(sheetStop);
+  fitRoute();
+}
+
+// Every change saves at once: there's no "save" to forget.
+function editStops(stops) {
+  const r = route();
+  if (!r) return;
+  r.stops = stops;
+  saveRoutes();
+  render();
+}
+
+function renderEditor() {
+  const r = route();
+  if (!r) return;
+  if (document.activeElement !== $('edName')) $('edName').value = r.name;
+  $('edStops').replaceChildren(...stopsOf(r).map((p, i) => {
+    const li = document.createElement('li');
+    li.dataset.name = p.name;
+    const name = el('span', p.name, 'name');
+    name.dir = 'auto';
+    name.onclick = () => { if (p.ll && map) { map.panTo(p.ll); p.openPin?.(); } };
+    const grip = el('button', '≡', 'grip');
+    grip.type = 'button';
+    grip.setAttribute('aria-label', `שינוי הסדר של ${p.name}: גררו, או חץ למעלה ולמטה`);
+    grip.onpointerdown = e => dragStop(e, li);
+    grip.onkeydown = e => {
+      const d = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      editStops(moveStop(r.stops, r.stops.indexOf(p.name), d));
+      $('edStops').querySelector(`li[data-name="${CSS.escape(p.name)}"] .grip`)?.focus();
+    };
+    const del = el('button', '✕');
+    del.type = 'button';
+    del.setAttribute('aria-label', `הסר את ${p.name} מהמסלול`);
+    del.onclick = () => editStops(r.stops.filter(n => n !== p.name));
+    li.append(el('span', i + 1, 'num'), name, grip, del);
+    return li;
+  }));
+  if (!$('edResults').hidden) showResults();
+}
+
+// Drag ≡ to reorder. The row follows the finger, the others slide aside; the order is saved on release.
+function dragStop(e, li) {
+  if (e.button > 0) return;
+  e.preventDefault();
+  const grip = e.currentTarget, rows = [...$('edStops').children];
+  const from = rows.indexOf(li), h = li.offsetHeight, startY = e.clientY;
+  let to = from;
+  grip.setPointerCapture(e.pointerId);
+  li.classList.add('dragging');
+  const move = ev => {
+    const dy = ev.clientY - startY;
+    li.style.transform = `translateY(${dy}px)`;
+    to = Math.min(rows.length - 1, Math.max(0, from + Math.round(dy / h)));
+    rows.forEach((x, k) => {
+      if (x === li) return;
+      const shift = from < to && k > from && k <= to ? -h : from > to && k < from && k >= to ? h : 0;
+      x.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+  };
+  const end = () => {
+    grip.removeEventListener('pointermove', move);
+    grip.removeEventListener('pointerup', end);
+    grip.removeEventListener('pointercancel', end);
+    rows.forEach(x => { x.style.transform = ''; });
+    li.classList.remove('dragging');
+    if (to === from) return;
+    const names = rows.map(x => x.dataset.name);
+    names.splice(to, 0, ...names.splice(from, 1));
+    editStops(names);
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', end);
+  grip.addEventListener('pointercancel', end);
+}
+
+// "Add stop": the saved places not in the route yet, nearest to the last stop first (routes are walked).
+function showResults() {
+  const r = route();
+  if (!r) return;
+  const last = stopsOf(r).filter(p => p.ll).at(-1);
+  const from = p => (last && p.ll ? metres(last.ll, p.ll) : Infinity);
+  const found = places.filter(p => !r.stops.includes(p.name) && matches(p, $('edQ').value))
+    .sort((a, b) => from(a) - from(b) || 0);
+  $('edResults').hidden = false;
+  $('edResults').replaceChildren(...(found.length ? found.map(p => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const txt = el('span', '', 'txt');
+    const name = el('strong', p.name);
+    name.dir = 'auto';
+    const away = from(p);
+    txt.append(name, el('small', [p.cat, p.area, Number.isFinite(away) && fmtWalk(away)].filter(Boolean).join(' · ')));
+    b.append(el('span', icon(p.cat), 'ico'), txt);
+    b.onclick = () => {
+      $('edQ').value = '';
+      $('edQ').blur();
+      editStops([...r.stops, p.name]);
+      fitRoute();
+    };
+    const li = document.createElement('li');
+    li.append(b);
+    return li;
+  }) : [el('li', 'אין מקום כזה ברשימה', 'empty')]));
+}
+
+$('edQ').onfocus = $('edQ').oninput = showResults;
+$('edQ').onblur = () => { $('edResults').hidden = true; };
+$('edQ').onkeydown = e => { if (e.key === 'Escape') $('edQ').blur(); };
+$('edResults').onpointerdown = e => e.preventDefault(); // keeps the box focused, so the tap lands on the result
+$('edName').onchange = () => {
+  const r = route(), name = $('edName').value.trim().slice(0, 60);
+  if (r && name && !routes.some(x => x !== r && x.name === name)) { r.name = routeName = name; saveRoutes(); }
+  $('edName').value = route()?.name || ''; // empty or taken: back to the old name
+};
+$('edName').onkeydown = e => { if (e.key === 'Enter') $('edName').blur(); };
+$('edBack').onclick = () => (history.state?.editor ? history.back() : closeEditor());
+addEventListener('popstate', closeEditor);
+new ResizeObserver(() => document.documentElement.style.setProperty('--etop', `${$('editor').offsetHeight}px`)).observe($('editor'));
 $('routeShare').onclick = async () => {
   const r = route();
   if (!r) return;

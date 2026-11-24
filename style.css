@@ -345,23 +345,18 @@ select {
 .route-text { flex: 1; min-width: 0; }
 #routeName { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
 #routeMeta { color: var(--soft); font-size: 14px; }
-#routeBar button, .route-ctl button {
+#routeBar button {
   min-width: 44px;
   min-height: 44px;
   border: 0;
-  padding: 0 8px;
+  padding: 0 6px;
   background: none;
   font-size: 15px;
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-#routeBar button { text-decoration: underline; text-underline-offset: 3px; }
 #routeDel { color: var(--accent); }
-.route-ctl { display: flex; gap: 4px; margin: 4px 0 -6px; }
-.route-ctl:empty { display: none; }
-.route-ctl button { border: 1px solid var(--line); border-radius: 999px; min-height: 36px; position: relative; }
-.route-ctl button::after { content: ""; position: absolute; inset: -4px 0; } /* 44px tap target */
-.route-ctl button:disabled { opacity: .3; cursor: default; }
-.route-ctl .add { padding: 0 14px; }
 .card { position: relative; }
 .card[data-n]::before {
   content: attr(data-n);
@@ -380,7 +375,147 @@ select {
   font-size: 13px;
   font-weight: 700;
 }
-.divider { margin: 22px 20px 10px; font-size: 16px; font-weight: 700; }
+/* Route editor: the header and the list make way, the map fills what's under the panel. */
+#editor, #edInfo { display: none; }
+body.editing .top, body.editing #sheet, body.editing .map-full-btn { display: none; }
+body.editing #map { top: var(--etop, 200px); height: auto !important; bottom: 0; } /* beats sizeMap's inline height */
+body.editing #editor {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 40;
+  display: block;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 10px;
+  border-radius: 0 0 20px 20px;
+  background: var(--bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .14);
+}
+.ed-head { display: flex; align-items: center; gap: 6px; }
+#edBack {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  border: 0;
+  padding: 0 4px 0 8px;
+  background: none;
+  font-size: 16px;
+  font-weight: 700;
+}
+#edName {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0 10px;
+  background: var(--tint);
+  font-size: 18px;
+  font-weight: 700;
+}
+#edName:focus { border-color: var(--ink); outline: 0; background: var(--card); }
+#edStops { max-height: 38dvh; margin: 6px 0 0; padding: 0; overflow-y: auto; list-style: none; overscroll-behavior: contain; }
+#edStops li { display: flex; align-items: center; gap: 10px; min-height: 48px; padding-inline-start: 4px; background: var(--bg); transition: transform .15s; }
+#edStops li.dragging { transition: none; }
+#edStops .name { cursor: pointer; }
+#edStops li + li { border-top: 1px solid var(--tint); }
+#edStops li.dragging { position: relative; z-index: 1; border-radius: 12px; box-shadow: var(--lift); }
+#edStops .num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+#edStops .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edStops button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--soft);
+  font-size: 20px;
+}
+#edStops .grip { cursor: grab; touch-action: none; } /* the finger drags the stop, not the list */
+#edStops .hint { color: var(--soft); font-size: 14px; }
+.ed-add { position: relative; margin-top: 6px; }
+#edQ {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 16px;
+  background: var(--card);
+  font-size: 16px; /* stops iOS zooming on focus */
+  -webkit-appearance: none;
+  appearance: none;
+}
+#edQ::placeholder { color: var(--ink); font-weight: 600; opacity: 1; }
+#edQ:focus { border-color: var(--ink); outline: 0; }
+#edResults {
+  position: absolute;
+  inset: calc(100% + 6px) 0 auto;
+  max-height: 46dvh;
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+  list-style: none;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--lift);
+}
+#edResults button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  padding: 6px 14px;
+  background: none;
+  text-align: right;
+}
+#edResults button:hover, #edResults button:focus-visible { background: var(--tint); }
+#edResults .ico { flex: none; font-size: 22px; }
+#edResults .txt { flex: 1; min-width: 0; }
+#edResults strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edResults small { color: var(--soft); font-size: 13px; }
+#edResults .empty { padding: 12px 16px; color: var(--soft); }
+body.editing #edInfo {
+  position: fixed;
+  bottom: calc(28px + env(safe-area-inset-bottom)); /* clear of Google's logo and terms */
+  inset-inline: 16px;
+  z-index: 20;
+  display: block;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .22);
+  font-weight: 700;
+  text-align: center;
+}
+.gm-style-iw button.pin-act {
+  display: block;
+  min-height: 40px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: #222;
+  color: #fff;
+  font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+.gm-style-iw button.pin-act.out { background: none; color: #d81e3f; padding: 0; text-decoration: underline; }
 .card.is-done h3 { color: var(--soft); text-decoration: line-through; }
 
 @media (min-width: 800px) {

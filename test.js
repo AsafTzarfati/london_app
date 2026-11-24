@@ -29,7 +29,10 @@ assert.strictEqual(fmtWalk(3556800), '3,557 ק״מ');
 assert.deepStrictEqual(walkParts(615), [10, 'דק׳']);
 assert.deepStrictEqual(walkParts(3200), ['3.2', 'ק״מ']);
 
-const { encodeRoute, decodeRoute, moveStop } = require('./near.js');
+const { encodeRoute, decodeRoute, moveStop, matches } = require('./near.js');
+const bakery = { name: 'Fortitude Bakehouse', cat: 'מאפים וקינוחים', area: 'בלומסברי', notes: 'בראוני' };
+assert.ok(matches(bakery, '  ') && matches(bakery, ' fortitude ') && matches(bakery, 'בראוני') && matches(bakery, 'בלומסברי'));
+assert.ok(!matches(bakery, 'soho'));
 const trip = { name: 'סוהו בבוקר', stops: ['Fortitude Bakehouse', 'heytea (SOHO)', 'Heard. Burger Soho'] };
 assert.match(encodeRoute(trip), /^[\w-]+$/); // safe in a URL hash as is
 assert.deepStrictEqual(decodeRoute(encodeRoute(trip)), trip);

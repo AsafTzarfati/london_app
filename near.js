@@ -26,6 +26,9 @@ function fmtWalk(m) {
 // A filter is worth showing only if it can narrow the list. A blank counts as a value: "must" on some rows is a choice.
 const hasChoice = (list, key) => new Set(list.map(p => p[key])).size > 1;
 
+// Text search over a place: the main list and the route editor's "add stop" box use the same match.
+const matches = (p, q) => !q.trim() || `${p.name} ${p.cat} ${p.area} ${p.notes}`.toLowerCase().includes(q.trim().toLowerCase());
+
 // A route travels between phones inside a link: base64url of its JSON (UTF-8, so Hebrew names survive).
 const encodeRoute = r =>
   btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify({ name: r.name, stops: r.stops }))))
@@ -48,4 +51,4 @@ function moveStop(stops, i, d) {
   return next;
 }
 
-if (typeof module !== 'undefined') module.exports = { metres, rankNear, walkParts, fmtWalk, hasChoice, encodeRoute, decodeRoute, moveStop }; // for test.js
+if (typeof module !== 'undefined') module.exports = { metres, rankNear, walkParts, fmtWalk, hasChoice, matches, encodeRoute, decodeRoute, moveStop }; // for test.js
