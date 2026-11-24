@@ -21,6 +21,7 @@
     <nav aria-label="סינון">
       <div id="cats" role="group" aria-label="קטגוריה"></div>
       <div class="selects">
+        <select id="route" aria-label="מסלול"></select>
         <select id="day" aria-label="יום"></select>
         <select id="pri" aria-label="עדיפות"></select>
       </div>
@@ -41,6 +42,15 @@
       <button id="handle" type="button" aria-label="הרחב את הרשימה"><span></span></button>
       <p id="status" role="status">טוען…</p>
       <div id="sheetBody">
+        <section id="routeBar" aria-labelledby="routeName" hidden>
+          <div class="route-text">
+            <h2 id="routeName" dir="auto"></h2>
+            <p id="routeMeta"></p>
+          </div>
+          <button id="routeShare" type="button">שתף</button>
+          <button id="routeDel" type="button">מחק</button>
+        </section>
+
         <section id="sign" aria-labelledby="signName" hidden>
           <p id="signLabel">הכי קרוב עכשיו</p>
           <h2 id="signName" dir="auto"></h2>
@@ -66,6 +76,7 @@
         <p class="walk" hidden></p>
         <p class="tags"></p>
         <p class="notes"></p>
+        <p class="route-ctl"></p>
       </div>
       <div class="actions">
         <label class="done"><input type="checkbox"></label>

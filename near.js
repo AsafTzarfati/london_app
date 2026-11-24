@@ -26,4 +26,26 @@ function fmtWalk(m) {
 // A filter is worth showing only if it can narrow the list. A blank counts as a value: "must" on some rows is a choice.
 const hasChoice = (list, key) => new Set(list.map(p => p[key])).size > 1;
 
-if (typeof module !== 'undefined') module.exports = { metres, rankNear, walkParts, fmtWalk, hasChoice }; // for test.js
+// A route travels between phones inside a link: base64url of its JSON (UTF-8, so Hebrew names survive).
+const encodeRoute = r =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify({ name: r.name, stops: r.stops }))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+function decodeRoute(s) { // the link comes from anyone: anything unexpected is null
+  try {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    const r = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+    const ok = typeof r?.name === 'string' && r.name.trim() && Array.isArray(r.stops) && r.stops.every(x => typeof x === 'string');
+    return ok ? { name: r.name.trim().slice(0, 60), stops: [...new Set(r.stops)] } : null;
+  } catch { return null; }
+}
+
+// Swap stop i with its neighbour d (-1 up, +1 down); out of range leaves the order as is.
+function moveStop(stops, i, d) {
+  const j = i + d, next = [...stops];
+  if (i < 0 || j < 0 || i >= next.length || j >= next.length) return next;
+  [next[i], next[j]] = [next[j], next[i]];
+  return next;
+}
+
+if (typeof module !== 'undefined') module.exports = { metres, rankNear, walkParts, fmtWalk, hasChoice, encodeRoute, decodeRoute, moveStop }; // for test.js

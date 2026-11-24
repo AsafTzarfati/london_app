@@ -29,4 +29,16 @@ assert.strictEqual(fmtWalk(3556800), '3,557 ק״מ');
 assert.deepStrictEqual(walkParts(615), [10, 'דק׳']);
 assert.deepStrictEqual(walkParts(3200), ['3.2', 'ק״מ']);
 
+const { encodeRoute, decodeRoute, moveStop } = require('./near.js');
+const trip = { name: 'סוהו בבוקר', stops: ['Fortitude Bakehouse', 'heytea (SOHO)', 'Heard. Burger Soho'] };
+assert.match(encodeRoute(trip), /^[\w-]+$/); // safe in a URL hash as is
+assert.deepStrictEqual(decodeRoute(encodeRoute(trip)), trip);
+assert.strictEqual(decodeRoute('not-a-route'), null);
+assert.strictEqual(decodeRoute(encodeRoute({ name: ' ', stops: [] })), null);
+assert.strictEqual(decodeRoute(Buffer.from('{"name":"x","stops":[1]}').toString('base64')), null);
+assert.deepStrictEqual(moveStop(['a', 'b', 'c'], 0, 1), ['b', 'a', 'c']);
+assert.deepStrictEqual(moveStop(['a', 'b', 'c'], 2, -1), ['a', 'c', 'b']);
+assert.deepStrictEqual(moveStop(['a', 'b', 'c'], 0, -1), ['a', 'b', 'c']);
+assert.deepStrictEqual(moveStop(['a', 'b', 'c'], 2, 1), ['a', 'b', 'c']);
+
 console.log('ok', rows.length - 1, 'places');

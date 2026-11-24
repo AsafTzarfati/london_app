@@ -18,6 +18,14 @@ const filter = { cat: '', day: '', pri: '' };
 let places = [], cats = [], me = null, loaded = false;
 let notice = '', undo = null; // status-line message; the place just marked done
 
+// Routes are built on this phone and travel to the others as a link (no backend).
+let routes = JSON.parse(localStorage.getItem('london-routes') || '[]'), routeName = localStorage.getItem('london-route') || '';
+let routeLine = [], lineKey = '', routeInfo = '';
+const NEW_ROUTE = '\u0000new';
+const route = () => routes.find(r => r.name === routeName);
+const stopsOf = r => (r ? r.stops.map(n => places.find(p => p.name === n)).filter(Boolean) : []);
+const saveRoutes = () => { localStorage.setItem('london-routes', JSON.stringify(routes)); localStorage.setItem('london-route', routeName); };
+
 let map = null, info = null, pins = [];
 let locating = false, signPlace = null, focusName = null, reframe = false, query = '', fullBtn = null;
 
@@ -53,8 +61,50 @@ window.initMap = async () => {
   map.controls[google.maps.ControlPosition.TOP_RIGHT].push(fullBtn);
   setSheet(sheetStop);
   render();
-  showOnMap();
+  if (route()) fitRoute(); else showOnMap();
 };
+
+// The real walking line from Google's Routes API; a dashed straight line when that fails (offline, API off, >25 stops).
+async function drawRoute(stops) {
+  if (!map) return;
+  const pts = stops.filter(p => p.ll).map(p => p.ll);
+  const key = JSON.stringify(pts);
+  if (key === lineKey) return; // only when the stops change, not on every render
+  lineKey = key;
+  routeLine.forEach(l => l.setMap(null));
+  routeLine = [];
+  routeInfo = '';
+  if (pts.length > 1) {
+    let line = [], text = '';
+    try {
+      if (pts.length > 27) throw new Error('too many stops');
+      const { Route } = await google.maps.importLibrary('routes');
+      const { routes: [best] = [] } = await Route.computeRoutes({
+        origin: pts[0], destination: pts.at(-1), intermediates: pts.slice(1, -1).map(location => ({ location })),
+        travelMode: 'WALKING', fields: ['path', 'distanceMeters', 'durationMillis'],
+      });
+      if (!best) throw new Error('no route');
+      line = best.createPolylines({ polylineOptions: { strokeColor: '#d81e3f', strokeWeight: 5, strokeOpacity: 0.85 } });
+      text = `${Math.round(best.durationMillis / 60000)} דק׳ הליכה · ${(best.distanceMeters / 1000).toFixed(1)} ק״מ`;
+    } catch {
+      line = [new google.maps.Polyline({ path: pts, strokeOpacity: 0,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.8, strokeColor: '#d81e3f', scale: 3 }, offset: '0', repeat: '12px' }] })];
+      text = `${fmtWalk(pts.slice(1).reduce((m, p, i) => m + metres(pts[i], p), 0))} בקו ישר`;
+    }
+    if (key !== lineKey) return; // the stops changed while Google answered
+    routeLine = line;
+    routeLine.forEach(l => l.setMap(map));
+    routeInfo = text;
+  }
+  renderRouteBar();
+}
+
+function fitRoute() {
+  const pts = stopsOf(route()).filter(p => p.ll);
+  if (!map || !pts.length) return;
+  map.fitBounds(pts.reduce((b, p) => b.extend(p.ll), new google.maps.LatLngBounds()), 60);
+  google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+}
 
 // Bottom sheet: three resting places over the map.
 const sheet = $('sheet'), sheetBody = $('sheetBody');
@@ -175,7 +225,8 @@ const dayNum = d => { const m = d.match(/(\d+)\.(\d+)/); return m ? m[2] * 100 +
 const color = p => PIN_COLORS[p.cat] || '#123f31';
 const dist = p => (me && p.ll ? metres(me, p.ll) : Infinity);
 const inLondon = () => !!me && places.some(p => p.ll && metres(me, p.ll) < 50000);
-const nextPlace = () => (inLondon() ? visible().find(p => p.ll && !done.has(p.name)) : undefined);
+const nextPlace = () => (route() ? stopsOf(route()).find(p => !done.has(p.name))
+  : inLondon() ? visible().find(p => p.ll && !done.has(p.name)) : undefined);
 const saveDone = () => localStorage.setItem('london-done', JSON.stringify([...done]));
 // With a place ID Google opens the business itself (hours, reviews); coordinates alone open a bare pin.
 const navUrl = p => 'https://www.google.com/maps/dir/?api=1&destination=' +
@@ -236,13 +287,33 @@ function buildFilters() {
   };
   fill('day', 'כל הימים', uniq('day').sort((a, b) => dayNum(a) - dayNum(b)));
   fill('pri', 'כל העדיפויות', uniq('pri'));
-  document.querySelector('.selects').hidden = $('day').hidden && $('pri').hidden;
 }
 
-function card(p) {
+function buildRoutes() {
+  $('route').replaceChildren(new Option('בלי מסלול', ''), ...routes.map(r => new Option(`מסלול: ${r.name}`, r.name)),
+    new Option('+ מסלול חדש…', NEW_ROUTE));
+  $('route').value = route() ? routeName : '';
+}
+
+function renderRouteBar() {
+  const r = route();
+  $('routeBar').hidden = !r;
+  if (!r) return;
+  const n = stopsOf(r).length;
+  $('routeName').textContent = r.name;
+  $('routeMeta').textContent = !n ? 'הוסיפו מקומות עם + מהרשימה למטה'
+    : [n === 1 ? 'תחנה אחת' : `${n} תחנות`, routeInfo].filter(Boolean).join(' · ');
+  $('routeShare').setAttribute('aria-label', `שתף את המסלול ${r.name}`);
+  $('routeDel').setAttribute('aria-label', `מחק את המסלול ${r.name}`);
+}
+
+// i = the place's position in the active route; undefined = not a stop.
+function card(p, i) {
   const node = $('card').content.firstElementChild.cloneNode(true);
   const isDone = done.has(p.name);
+  const r = route(), isStop = i !== undefined;
   node.classList.toggle('is-done', isDone);
+  if (isStop) node.dataset.n = i + 1;
   node.style.setProperty('--c', color(p));
   const thumb = node.querySelector('.thumb');
   thumb.textContent = icon(p.cat);
@@ -276,6 +347,23 @@ function card(p) {
     render();
   };
 
+  if (r) {
+    const btn = (label, aria, stops, cls) => {
+      const b = el('button', label, cls);
+      b.type = 'button';
+      b.setAttribute('aria-label', aria);
+      b.disabled = !stops;
+      b.onclick = e => { e.stopPropagation(); r.stops = stops; saveRoutes(); undo = null; render(); };
+      return b;
+    };
+    const at = r.stops.indexOf(p.name), last = r.stops.length - 1;
+    node.querySelector('.route-ctl').append(...(isStop ? [
+      btn('↑', `הקדם את ${p.name} במסלול`, at > 0 && moveStop(r.stops, at, -1)),
+      btn('↓', `דחה את ${p.name} במסלול`, at < last && moveStop(r.stops, at, 1)),
+      btn('✕', `הסר את ${p.name} מהמסלול`, r.stops.filter(n => n !== p.name)),
+    ] : [btn('+ למסלול', `הוסף את ${p.name} למסלול ${r.name}`, [...r.stops, p.name], 'add')]));
+  }
+
   if (p.ll) node.querySelector('.body').onclick = () => focusOnMap(p);
   if (p.ll && map) {
     const pop = el('div', '');
@@ -284,7 +372,8 @@ function card(p) {
     link.href = navUrl(p); link.target = '_blank'; link.rel = 'noopener';
     pop.append(el('strong', p.name), document.createElement('br'), link);
     // ponytail: classic Marker needs no Cloud map ID; move to AdvancedMarkerElement if Google removes it
-    const pin = dot(p.ll, color(p), p.name, icon(p.cat), isDone ? 0.4 : 1);
+    const pin = isStop ? dot(p.ll, color(p), p.name, String(i + 1), isDone ? 0.5 : 1, true)
+      : dot(p.ll, color(p), p.name, icon(p.cat), isDone || r ? 0.4 : 1); // a route dims everything else
     p.openPin = () => { info.setContent(pop); info.open({ map, anchor: pin }); };
     pin.addListener('click', p.openPin);
   }
@@ -296,10 +385,11 @@ const pinSize = zoom => zoom < 12.5 ? { scale: 4 } : zoom < 13.5 ? { scale: 5 } 
   zoom < 14.5 ? { scale: 8, font: 10 } : zoom < 15.5 ? { scale: 10, font: 12 } : { scale: 13, font: 15 };
 
 function paint(pin) {
-  const { ring, emoji } = pin.look;
-  const { scale, font } = emoji ? pinSize(map.getZoom()) : { scale: 8 }; // my location keeps its size
+  const { ring, emoji, stop } = pin.look;
+  // my location keeps its size; route stops keep their number at every zoom
+  const { scale, font } = !emoji ? { scale: 8 } : stop ? { scale: 12, font: 14 } : pinSize(map.getZoom());
   const withIcon = emoji && font;
-  pin.setLabel(withIcon ? { text: emoji, fontSize: `${font}px` } : null);
+  pin.setLabel(withIcon ? { text: emoji, fontSize: `${font}px`, fontWeight: stop ? '700' : '400' } : null);
   if (withIcon) {
     // a white disc with a soft shadow; the classic Marker's vector symbols can't cast one
     const size = scale * 2 + 10, c = size / 2;
@@ -315,17 +405,19 @@ function paint(pin) {
   }
 }
 
-function dot(position, ring, title, emoji, opacity = 1) {
-  const pin = new google.maps.Marker({ map, position, title, opacity });
-  pin.look = { ring, emoji };
+function dot(position, ring, title, emoji, opacity = 1, stop = false) {
+  const pin = new google.maps.Marker({ map, position, title, opacity, zIndex: stop ? 1000 : undefined });
+  pin.look = { ring, emoji, stop };
   paint(pin);
   pins.push(pin);
   return pin;
 }
 
+// The filtered list. With a route on, its stops are left out: they're listed above, in route order.
 function visible() {
   const q = query.trim().toLowerCase();
-  const shown = places.filter(p => ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]) &&
+  const stops = route()?.stops || [];
+  const shown = places.filter(p => !stops.includes(p.name) && ['cat', 'day', 'pri'].every(k => !filter[k] || p[k] === filter[k]) &&
     (!q || `${p.name} ${p.cat} ${p.area} ${p.notes}`.toLowerCase().includes(q)));
   return me ? rankNear(shown, p => done.has(p.name), dist) : shown;
 }
@@ -355,9 +447,11 @@ function renderSign() {
   $('sign').hidden = !p;
   if (!p) return;
   const headline = p.name.split(' - ')[0];
+  $('signLabel').textContent = route() ? 'התחנה הבאה' : 'הכי קרוב עכשיו';
   $('signName').textContent = headline;
   $('signName').classList.toggle('long', headline.length > 20); // keeps the sign from pushing the list off screen
-  $('signMeta').textContent = [p.cat && `${icon(p.cat)} ${p.cat}`, fmtWalk(dist(p))].filter(Boolean).join(' · ');
+  const d = dist(p); // Infinity before the location is known
+  $('signMeta').textContent = [p.cat && `${icon(p.cat)} ${p.cat}`, Number.isFinite(d) && fmtWalk(d)].filter(Boolean).join(' · ');
   $('signNav').href = navUrl(p);
   $('signNav').setAttribute('aria-label', `נווט אל ${p.name}`);
   $('signDone').setAttribute('aria-label', `סמן כבוצע: ${p.name}`);
@@ -366,14 +460,33 @@ function renderSign() {
 function render() {
   const shown = visible();
   const next = nextPlace();
+  const r = route(), stops = stopsOf(r);
   pins.forEach(pin => pin.setMap(null));
   pins = [];
   info?.close();
-  const nodes = shown.map(card); // every place gets its pin, including the one on the sign
-  $('list').replaceChildren(...nodes.filter((_, i) => shown[i] !== next));
+  const nodes = shown.map(p => card(p)); // every place gets its pin, including the one on the sign
+  // A route keeps its numbered stops whole (the next one is on the sign too), then the places to add.
+  $('list').replaceChildren(...(r
+    ? [...stops.map(card), ...(nodes.length ? [el('h3', 'להוסיף למסלול', 'divider'), ...nodes] : [])]
+    : nodes.filter((_, i) => shown[i] !== next)));
   if (me && map) dot(me, '#1a73e8', 'אני כאן');
+  drawRoute(stops);
+  renderRouteBar();
   renderSign();
   showStatus();
+}
+
+// Opening a shared link (#r=…) adds its route to this phone and shows it.
+function importLink() {
+  const m = location.hash.match(/^#r=([\w-]+)$/);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  const r = decodeRoute(m[1]);
+  if (!r) { notice = 'קישור המסלול פגום'; return; }
+  routes = [...routes.filter(x => x.name !== r.name), r]; // same name: the link wins
+  routeName = r.name;
+  saveRoutes();
+  notice = 'המסלול נוסף';
 }
 
 async function load() {
@@ -445,6 +558,44 @@ new ResizeObserver(fitLayout).observe(document.querySelector('.top'));
 addEventListener('resize', fitLayout);
 
 $('day').onchange = $('pri').onchange = e => { filter[e.target.id] = e.target.value; undo = null; render(); };
+
+function showRoute(name) {
+  routeName = name;
+  saveRoutes();
+  buildRoutes();
+  undo = null;
+  notice = '';
+  render();
+  fitRoute();
+  if (name && sheetStop === 'peek') setSheet('half', true);
+}
+$('route').onchange = e => {
+  if (e.target.value !== NEW_ROUTE) return showRoute(e.target.value);
+  const name = prompt('שם המסלול, למשל: יום ב׳ – סוהו')?.trim().slice(0, 60);
+  if (!name) return buildRoutes(); // cancelled: back to what was selected
+  if (!routes.some(r => r.name === name)) routes.push({ name, stops: [] }); // an existing name just opens that route
+  showRoute(name);
+};
+$('routeShare').onclick = async () => {
+  const r = route();
+  if (!r) return;
+  const url = `${location.origin}${location.pathname}#r=${encodeRoute(r)}`;
+  try {
+    if (navigator.share) return void await navigator.share({ title: r.name, url });
+    await navigator.clipboard.writeText(url);
+    notice = 'הקישור למסלול הועתק';
+    showStatus();
+  } catch (err) {
+    if (err.name !== 'AbortError') prompt('העתיקו את הקישור למסלול:', url); // share sheet closed = AbortError
+  }
+};
+$('routeDel').onclick = () => {
+  const r = route();
+  if (!r || !confirm(`למחוק את המסלול "${r.name}"? המקומות עצמם נשארים.`)) return;
+  routes = routes.filter(x => x !== r);
+  showRoute('');
+};
+addEventListener('hashchange', () => { importLink(); buildRoutes(); render(); fitRoute(); });
 addEventListener('online', () => { load(); loadMap(); });
 addEventListener('offline', render);
 
@@ -455,6 +606,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', update, { once: true });
   navigator.serviceWorker.register('sw.js').catch(() => {}); // app still works online without it
 }
+importLink();
+buildRoutes();
 fitLayout();
 renderSign();
 load();

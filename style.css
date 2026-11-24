@@ -337,6 +337,50 @@ select {
   text-underline-offset: 3px;
 }
 .card.is-done .thumb { filter: grayscale(1); opacity: .6; }
+
+/* Routes */
+#route { flex: 2; }
+#routeBar { display: flex; align-items: center; gap: 4px; margin: 0 16px 14px; }
+#routeBar[hidden] { display: none; }
+.route-text { flex: 1; min-width: 0; }
+#routeName { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+#routeMeta { color: var(--soft); font-size: 14px; }
+#routeBar button, .route-ctl button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 0 8px;
+  background: none;
+  font-size: 15px;
+  font-weight: 600;
+}
+#routeBar button { text-decoration: underline; text-underline-offset: 3px; }
+#routeDel { color: var(--accent); }
+.route-ctl { display: flex; gap: 4px; margin: 4px 0 -6px; }
+.route-ctl:empty { display: none; }
+.route-ctl button { border: 1px solid var(--line); border-radius: 999px; min-height: 36px; position: relative; }
+.route-ctl button::after { content: ""; position: absolute; inset: -4px 0; } /* 44px tap target */
+.route-ctl button:disabled { opacity: .3; cursor: default; }
+.route-ctl .add { padding: 0 14px; }
+.card { position: relative; }
+.card[data-n]::before {
+  content: attr(data-n);
+  position: absolute;
+  inset-inline-start: 2px;
+  top: 2px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+.divider { margin: 22px 20px 10px; font-size: 16px; font-weight: 700; }
 .card.is-done h3 { color: var(--soft); text-decoration: line-through; }
 
 @media (min-width: 800px) {
