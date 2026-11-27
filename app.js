@@ -571,8 +571,7 @@ $('route').onchange = e => {
   let name = 'מסלול חדש', k = 2; // renamed in the editor's header
   while (routes.some(r => r.name === name)) name = `מסלול חדש ${k++}`;
   routes.push({ name, stops: [] });
-  openEditor(name);
-  $('edQ').focus(); // an empty route starts from the list of places
+  openEditor(name); // the list opens only when "add stop" is tapped
 };
 $('routeEdit').onclick = () => openEditor(routeName);
 
